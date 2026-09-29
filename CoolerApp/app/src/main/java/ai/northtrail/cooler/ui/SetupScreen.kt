@@ -17,6 +17,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,6 +48,9 @@ fun SetupScreen(
     var base by rememberSaveable { mutableStateOf(initial.base) }
     val config = BrokerConfig(host, port.toIntOrNull() ?: 0, username, password, base)
 
+    // Setup is shown outside the Scaffold, so give it the themed surface: without
+    // it the text falls back to black on the dark window.
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
     Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState()).padding(24.dp)) {
         Text("Connect to the cooler", style = MaterialTheme.typography.headlineSmall)
         Text("TLS only; the password is stored encrypted on this phone.", style = MaterialTheme.typography.bodySmall)
@@ -81,5 +85,6 @@ fun SetupScreen(
         }
         setup.error?.let { Text(it, color = CoolerColors.Bad, modifier = Modifier.padding(top = 8.dp)) }
         if (onCancel != null) TextButton(onClick = onCancel, enabled = !setup.probing, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+    }
     }
 }

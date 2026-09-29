@@ -15,6 +15,24 @@ wall LCD. Design: `docs/superpowers/specs/2026-09-28-cooler-android-app-design.m
 The app connects only while it is open. It does not notify; alerts belong in
 Node-RED, fed from the retained `cooler/data` and `cooler/availability`.
 
+<p>
+  <img src="../docs/screenshots/app-status.png" width="200" alt="Status">
+  <img src="../docs/screenshots/app-settings.png" width="200" alt="Settings">
+  <img src="../docs/screenshots/app-detail.png" width="200" alt="Detail">
+  <img src="../docs/screenshots/app-setup.png" width="200" alt="Setup">
+</p>
+
+The screenshots are rendered from sample data by the `ReadmeScreenshots`
+instrumented test (skipped unless asked for):
+
+```bash
+./gradlew connectedDebugAndroidTest \
+  -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true \
+  -Pandroid.testInstrumentationRunnerArguments.class=ai.northtrail.cooler.ui.ReadmeScreenshots \
+  -Pandroid.testInstrumentationRunnerArguments.screenshots=true
+adb pull /sdcard/Android/data/ai.northtrail.cooler/files/screenshots/ .
+```
+
 ## Build and install
 
 ```bash

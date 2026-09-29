@@ -103,6 +103,20 @@ SDL_VIDEODRIVER=dummy ./build/cooler_sim --seed-history \
 - `--screen boot|setup|setup-qr` shows the boot or setup screens.
 - A fixture with a fault flag raises its alarm takeover, which covers the page.
 
+The README screenshots in `../docs/screenshots/` come from
+`tools/capture_screenshots.sh`, which runs these commands for every screen:
+
+<p>
+  <img src="../docs/screenshots/panel-trend.png" width="240" alt="Trend">
+  <img src="../docs/screenshots/panel-trend-override.png" width="240" alt="Trend, override switch on">
+  <img src="../docs/screenshots/panel-alarm-ac.png" width="240" alt="AC not responding alarm">
+</p>
+<p>
+  <img src="../docs/screenshots/panel-settings-box.png" width="240" alt="Settings, Box tab">
+  <img src="../docs/screenshots/panel-detail.png" width="240" alt="Detail">
+  <img src="../docs/screenshots/panel-boot.png" width="240" alt="Boot screen">
+</p>
+
 ## 6. Portability rule
 
 **Everything under `shared/` may call LVGL and nothing else.** No SDL,

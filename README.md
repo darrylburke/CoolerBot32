@@ -16,6 +16,17 @@ flowchart LR
     BRK -.-> NR[Node-RED<br/>alerts + history, planned]
 ```
 
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/panel-trend.png" width="320" alt="CoolerPanel trend screen"><br>Wall panel (480×480)</td>
+    <td align="center"><img src="docs/screenshots/app-status.png" width="200" alt="CoolerApp status screen"><br>Android app</td>
+  </tr>
+</table>
+
+More in [docs/screenshots](docs/screenshots/): panel trend in override and defrost, alarm takeovers, settings tabs, detail and boot screens; app settings, detail and setup. They are rendered from sample data, not a live cooler.
+
 ## How the CN3 trick works
 
 The AC reads its room temperature from a thermistor on connector CN3. The thermistor is unplugged and a resistor network goes in its place: 35 kΩ is always across CN3, and a 22 kΩ resistor is added in parallel through the relay.
@@ -130,6 +141,7 @@ Folders in this repository:
 controller/        ESPHome firmware: cooler-v4.yaml, cooler_logic.h, cooler_esphome.h,
                    relay-test.yaml, i2c-diag.yaml, secrets.yaml.example, tests/ (host tests)
 V4_Wiring/         wiring page (index.html), PDF export, photos/
+docs/screenshots/  panel and app screenshots (sample data)
 docs/superpowers/  design specs and implementation plans (dated, historical)
 RULES-v4.md        current rules, hardware, settings, install checklist
 RULES.md           legacy v3 dual-AC rules
