@@ -1,4 +1,4 @@
-# Walk-in cooler controller
+# CoolerBot32: walk-in cooler controller
 
 An ESP32 (ESPHome) keeps a walk-in cooler ("Cooler32") at temperature using a single Frigidaire window AC. The ESP32 never switches compressor power. It fakes the AC's room thermistor at the AC's CN3 connector, using a resistor network switched by one relay, so the AC's own board decides when to cool. The controller adds icing (defrost) protection, timing protections, sensor-failure fallbacks and an override switch. It reports over MQTT (TLS) to a wall LCD (CoolerPanel) and an Android app (CoolerApp).
 
