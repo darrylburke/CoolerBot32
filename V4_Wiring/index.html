@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Cooler v4 Wiring</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --bg: #f2f5f6; --panel: #ffffff; --ink: #1b2226; --muted: #5d6a70; --rule: #d9e0e3;
+  --grid: #e6ecee;
+  --n33: #c43d2a; --n5: #a86b12; --sig: #2a5f9e; --ac: #7446ad; --warn: #b3261e;
+  --ac-fill: rgba(116, 70, 173, 0.06); --warn-fill: rgba(179, 38, 30, 0.07);
+  --font-ui: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-cond: "Barlow Semi Condensed", "Barlow", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111618; --panel: #171e21; --ink: #e2e8ea; --muted: #93a1a7; --rule: #263136;
+    --grid: #1c2528;
+    --n33: #f07a62; --n5: #e2a64c; --sig: #74a9e8; --ac: #b690ea; --warn: #ff8a80;
+    --ac-fill: rgba(182, 144, 234, 0.08); --warn-fill: rgba(255, 138, 128, 0.08);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111618; --panel: #171e21; --ink: #e2e8ea; --muted: #93a1a7; --rule: #263136;
+  --grid: #1c2528;
+  --n33: #f07a62; --n5: #e2a64c; --sig: #74a9e8; --ac: #b690ea; --warn: #ff8a80;
+  --ac-fill: rgba(182, 144, 234, 0.08); --warn-fill: rgba(255, 138, 128, 0.08);
+}
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--font-ui); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 32px 16px 56px; }
+header { display: grid; gap: 6px; margin-bottom: 20px; }
+.eyebrow { font: 600 12px/1 var(--font-cond); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+h1 { font: 700 34px/1.1 var(--font-cond); margin: 0; text-wrap: balance; }
+.lede { margin: 0; max-width: 68ch; color: var(--muted); }
+h2 { font: 600 20px/1.2 var(--font-cond); margin: 0 0 10px; text-wrap: balance; }
+
+figure { margin: 0 0 28px; background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; }
+.scroll { overflow-x: auto; padding: 12px 8px 4px; }
+figure svg { display: block; width: 100%; min-width: 900px; height: auto; color: var(--ink); }
+figcaption { padding: 10px 16px 14px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 13.5px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-bottom: 6px; color: var(--ink); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; }
+.legend i { width: 22px; height: 3px; border-radius: 2px; display: inline-block; }
+
+/* SVG styling (kept outside the SVG so both themes apply) */
+.w { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.w.sig { stroke: var(--sig); } .w.p33 { stroke: var(--n33); } .w.p5 { stroke: var(--n5); }
+.w.gnd { stroke: var(--ink); } .w.ac { stroke: var(--ac); } .w.dim { stroke: var(--muted); stroke-dasharray: 3 3; }
+.dot { stroke: none; } .dot.sig { fill: var(--sig); } .dot.p5 { fill: var(--n5); } .dot.ac { fill: var(--ac); }
+.term { fill: var(--panel); stroke: var(--sig); stroke-width: 2; }
+.led { fill: var(--sig); }
+.part { fill: var(--panel); stroke: var(--ink); stroke-width: 1.5; }
+.conn { fill: var(--panel); stroke: var(--ac); stroke-width: 1.5; }
+.aczone { fill: var(--ac-fill); stroke: var(--ac); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.warnbox { fill: var(--warn-fill); stroke: var(--warn); stroke-width: 1.2; }
+.tag { fill: var(--panel); stroke-width: 1.5; } .tag.p33 { stroke: var(--n33); }
+svg text { font-family: var(--font-mono); font-size: 12px; fill: var(--ink); }
+.ptitle { font-family: var(--font-cond); font-weight: 700; font-size: 15px; }
+.psub { fill: var(--muted); font-size: 11px; }
+.pin { font-size: 11.5px; }
+.tagt { font-size: 11px; font-weight: 500; } .tagt.p33 { fill: var(--n33); }
+.wl { fill: var(--sig); font-size: 11px; }
+.val { font-size: 12px; font-weight: 500; }
+.note { fill: var(--muted); font-family: var(--font-ui); font-size: 12px; }
+.warn { fill: var(--warn); font-family: var(--font-cond); font-weight: 700; font-size: 13px; letter-spacing: .04em; }
+.zlabel { fill: var(--ac); font-family: var(--font-cond); font-weight: 700; font-size: 12.5px; letter-spacing: .06em; }
+
+.cols { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 860px) { .cols { grid-template-columns: 1fr; } }
+.card { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 18px 18px 8px; }
+.stack { display: grid; gap: 28px; }
+.tbl { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font: 600 12px/1.2 var(--font-cond); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 0 10px 8px 0; border-bottom: 1px solid var(--rule); }
+td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.m, code { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; }
+.chip { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: 0; }
+.group td { font: 600 12px/1 var(--font-cond); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding-top: 16px; }
+ul, ol { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
+li { max-width: 62ch; }
+.danger { border-color: var(--warn); background: var(--warn-fill); }
+.danger h2 { color: var(--warn); }
+p.small { color: var(--muted); font-size: 13.5px; margin: 12px 0 14px; }
+.progress { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 28px; margin-bottom: 28px; }
+@media (max-width: 860px) { .progress { grid-template-columns: 1fr; } }
+.checklist { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.checklist li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start; max-width: none; }
+.mark { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; font: 700 12px/1 var(--font-ui); margin-top: 1px; }
+.mark.ok { background: var(--sig); color: var(--panel); }
+.mark.todo { border: 2px solid var(--muted); color: var(--muted); font-size: 11px; }
+.checklist b { font-weight: 600; }
+.checklist .sub { color: var(--muted); font-size: 13.5px; display: block; }
+.card.done { border-color: var(--sig); }
+.module { fill: var(--grid); stroke: var(--muted); stroke-width: 1.2; }
+.usb { fill: var(--grid); stroke: var(--muted); stroke-width: 1.2; }
+.hp { stroke-width: 2; }
+.hp.free { fill: var(--panel); stroke: var(--muted); }
+.hp.avoid { fill: var(--panel); stroke: var(--muted); stroke-dasharray: 2 2; }
+.hp.nc { fill: var(--grid); stroke: var(--warn); stroke-width: 1.5; }
+.hn.nc { fill: var(--warn); text-decoration: line-through; }
+.hp.sig { fill: var(--sig); stroke: var(--sig); } .hp.p33 { fill: var(--n33); stroke: var(--n33); }
+.hp.p5 { fill: var(--n5); stroke: var(--n5); } .hp.gnd { fill: var(--ink); stroke: var(--ink); }
+.hn { font-size: 11.5px; } .hn.free, .hn.avoid { fill: var(--muted); }
+.hn.sig { fill: var(--sig); font-weight: 500; } .hn.p33 { fill: var(--n33); font-weight: 500; }
+.hn.p5 { fill: var(--n5); font-weight: 500; } .hn.gnd { font-weight: 500; }
+.co { font-family: var(--font-ui); font-size: 13px; }
+.board { fill: var(--grid); stroke: var(--rule); stroke-width: 1.5; }
+.screw { stroke-width: 1.5; } .screw.live { fill: var(--panel); stroke: var(--ac); } .screw.idle { fill: var(--grid); stroke: var(--muted); stroke-dasharray: 3 3; }
+.screwhead { fill: none; stroke-width: 1.3; } .screwhead.live { stroke: var(--ac); } .screwhead.idle { stroke: var(--muted); }
+.slot { stroke-width: 1.5; } .slot.live { stroke: var(--ac); } .slot.idle { stroke: var(--muted); }
+.tlabel { font-size: 12px; font-weight: 500; } .tlabel.live { fill: var(--ac); } .tlabel.idle { fill: var(--muted); }
+.grp { font-family: var(--font-cond); font-weight: 600; font-size: 13px; letter-spacing: .04em; fill: var(--ac); } .grp.idle { fill: var(--muted); }
+.bnum { font-family: var(--font-cond); font-weight: 700; font-size: 15px; fill: var(--ac); }
+.node { font-size: 11.5px; fill: var(--ac); }
+.arrow { fill: var(--ac); }
+figure .scroll.block svg { min-width: 620px; max-width: 760px; margin: 0 auto; }
+.twocol { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 0; }
+@media (max-width: 860px) { .twocol { grid-template-columns: 1fr; } }
+.steps { padding: 14px 18px 16px; border-left: 1px solid var(--rule); }
+@media (max-width: 860px) { .steps { border-left: 0; border-top: 1px solid var(--rule); } }
+.steps h3 { font: 600 16px/1.2 var(--font-cond); margin: 0 0 8px; }
+.steps ol { font-size: 14px; }
+.stagegrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 900px) { .stagegrid { grid-template-columns: 1fr; } }
+.stage { padding: 14px 16px 16px; display: grid; gap: 8px; align-content: start; }
+.stage + .stage { border-left: 1px solid var(--rule); }
+@media (max-width: 900px) { .stage + .stage { border-left: 0; border-top: 1px solid var(--rule); } }
+.stage h3 { font: 600 17px/1.2 var(--font-cond); margin: 0; display: flex; gap: 10px; align-items: center; }
+.stagetag { font: 700 11px/1 var(--font-cond); letter-spacing: .1em; text-transform: uppercase; color: var(--panel); background: var(--ac); padding: 5px 8px; border-radius: 4px; }
+.stage ol { font-size: 14px; }
+.stage .scroll.block { padding: 0; }
+.stage .scroll.block svg { min-width: 480px; max-width: 100%; }
+.figtitle { font: 600 13px/1 var(--font-cond); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 14px 16px 0; }
+figure .scroll.map svg { min-width: 760px; max-width: 1000px; margin: 0 auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="eyebrow">Walk-in cooler · controller v4</div>
+  <h1>Wiring the single-relay controller</h1>
+  <p class="lede">One ESP32 (WROOM-32U, 38-pin USB-C DevKit) reads the box air and the AC’s coil, and one relay swaps the resistance the Frigidaire sees on its room-thermistor connector (CN3). Pin numbers match <code>controller/cooler-v4.yaml</code>.</p>
+</header>
+
+<div class="progress">
+  <section class="card done">
+    <h2>Done so far</h2>
+    <ul class="checklist">
+      <li><span class="mark ok">✓</span><span><b>Relays</b><span class="sub">Cooling relay on GPIO16, other held off on GPIO19. Both stay off through boot.</span></span></li>
+      <li><span class="mark ok">✓</span><span><b>Override switch → GPIO21, LED → GPIO32</b><span class="sub">Switch changes mode normal ↔ override; state survives a power cycle.</span></span></li>
+      <li><span class="mark ok">✓</span><span><b>SHT30 on SDA 33 / SCL 22</b><span class="sub">Reads at I²C 10 kHz (100 kHz failed on its cable).</span></span></li>
+      <li><span class="mark ok">✓</span><span><b>Coil thermistor on GPIO35</b><span class="sub">32 kΩ pull-up; read 23.4 °C beside the SHT30’s 23.4 °C.</span></span></li>
+      <li><span class="mark ok">✓</span><span><b>AC-side block</b><span class="sub">1–2 reads 35 kΩ with the relay open and 13.6 kΩ closed.</span></span></li>
+      <li><span class="mark ok">✓</span><span><b>MQTT</b><span class="sub">TLS to mqtt.example.com as <code>cooler</code>; topics <code>cooler/…</code>.</span></span></li>
+      <li><span class="mark ok">✓</span><span><b>LCD panel (CoolerPanel)</b><span class="sub">On the broker with its own login over TLS; settings sent from the panel reach the controller.</span></span></li>
+      <li><span class="mark ok">✓</span><span><b>Ice-pack bench test (2026-09-28)</b><span class="sub">Cooling on/off thresholds, min run and min off timing and defrost trip and recovery all behaved. <code>fin_cutoff</code> now defaults to 1 °C.</span></span></li>
+      <li><span class="mark ok">✓</span><span><b>CoolerApp (Android)</b><span class="sub">Built; its own broker login created; APK sent to the phone.</span></span></li>
+    </ul>
+  </section>
+  <section class="card">
+    <h2>Still to do, in this order</h2>
+    <ol class="checklist">
+      <li><span class="mark todo">1</span><span><b>Set the Frigidaire</b>: Cool, fan continuous, setpoint at its minimum (≈16 °C)<span class="sub">It must sit between the fake −1 °C (open) and 18 °C (closed).</span></span></li>
+      <li><span class="mark todo">2</span><span><b>Move the thermistor</b> into the coil fins and connect block 1–2 to CN3<span class="sub">AC unplugged while wiring.</span></span></li>
+      <li><span class="mark todo">3</span><span><b>Install checklist</b> in <code>RULES-v4.md</code>: AC timing test, then fin calibration</span></li>
+      <li><span class="mark todo">4</span><span><b>Set <code>coolerset</code> back to 4 °C</b> for real use<span class="sub">The bench controller is at 12 °C.</span></span></li>
+      <li><span class="mark todo">5</span><span><b>Check CoolerApp on the phone</b></span></li>
+      <li><span class="mark todo">6</span><span><b>Alerts and long-term history</b> in Node-RED<span class="sub">From the retained <code>cooler/data</code> and <code>cooler/availability</code>.</span></span></li>
+    </ol>
+  </section>
+</div>
+
+<figure>
+  <div class="figtitle">Schematic</div>
+  <div class="scroll">
+<svg viewBox="0 0 1280 540" role="img" aria-label="Wiring schematic: ESP32-WROOM-32U connected to an SHT30 on GPIO33 (SDA) and 22 (SCL), the coil thermistor divider on GPIO35, the override switch on GPIO21, the LED on GPIO32, the cooling relay on GPIO16 and the unused relay held off on GPIO19; the relay contacts switch a 22 kilohm resistor in parallel with a 35 kilohm resistor across the AC connector CN3."><rect class="part" x="420" y="110" width="230" height="420" rx="6"/><text class="ptitle" x="432" y="132" text-anchor="start">ESP32-WROOM-32U</text><text class="psub" x="432" y="148" text-anchor="start">38-pin DevKit · USB-C</text><polyline class="w p33" points="420,170 400,170"/><text class="pin" x="428" y="174" text-anchor="start">3V3</text><polyline class="w gnd" points="420,210 400,210"/><text class="pin" x="428" y="214" text-anchor="start">GND</text><polyline class="w sig" points="420,270 400,270"/><text class="pin" x="428" y="274" text-anchor="start">GPIO33 · SDA</text><polyline class="w sig" points="420,310 400,310"/><text class="pin" x="428" y="314" text-anchor="start">GPIO22 · SCL</text><polyline class="w sig" points="420,370 400,370"/><text class="pin" x="428" y="374" text-anchor="start">GPIO35 · ADC</text><polyline class="w sig" points="420,430 400,430"/><text class="pin" x="428" y="434" text-anchor="start">GPIO21</text><polyline class="w sig" points="420,490 400,490"/><text class="pin" x="428" y="494" text-anchor="start">GPIO32</text><polyline class="w p5" points="650,170 670,170"/><text class="pin" x="642" y="174" text-anchor="end">5V</text><polyline class="w sig" points="650,350 670,350"/><text class="pin" x="642" y="354" text-anchor="end">GPIO16</text><polyline class="w sig" points="650,390 670,390"/><text class="pin" x="642" y="394" text-anchor="end">GPIO19</text><polyline class="w p33" points="400,170 388,170"/><rect class="tag p33" x="344" y="160" width="44" height="20" rx="10"/><text class="tagt p33" x="366.0" y="174" text-anchor="middle">3V3</text><polyline class="w gnd" points="400,210 380,210"/><polyline class="w gnd" points="380,210 380,222"/><line class="w gnd" x1="370" y1="222" x2="390" y2="222"/><line class="w gnd" x1="374" y1="227" x2="386" y2="227"/><line class="w gnd" x1="377.5" y1="232" x2="382.5" y2="232"/><rect class="part" x="140" y="210" width="150" height="130" rx="6"/><text class="ptitle" x="152" y="232" text-anchor="start">SHT30</text><text class="psub" x="152" y="248" text-anchor="start">box air · I²C 0x44</text><polyline class="w sig" points="290,270 400,270"/><text class="wl" x="345" y="263" text-anchor="middle">SDA</text><polyline class="w sig" points="290,310 400,310"/><text class="wl" x="345" y="303" text-anchor="middle">SCL</text><text class="pin" x="282" y="274" text-anchor="end">SDA</text><text class="pin" x="282" y="314" text-anchor="end">SCL</text><polyline class="w p33" points="260,210 260,202"/><polyline class="w p33" points="260,202 260,190"/><rect class="tag p33" x="238.0" y="170" width="44" height="20" rx="10"/><text class="tagt p33" x="260" y="184" text-anchor="middle">3V3</text><text class="pin" x="282" y="228" text-anchor="end">VIN</text><polyline class="w gnd" points="140,322 110,322"/><polyline class="w gnd" points="110,322 110,334"/><line class="w gnd" x1="100" y1="334" x2="120" y2="334"/><line class="w gnd" x1="104" y1="339" x2="116" y2="339"/><line class="w gnd" x1="107.5" y1="344" x2="112.5" y2="344"/><text class="pin" x="148" y="326" text-anchor="start">GND</text><polyline class="w p33" points="80,370 68,370"/><rect class="tag p33" x="24" y="360" width="44" height="20" rx="10"/><text class="tagt p33" x="46.0" y="374" text-anchor="middle">3V3</text><polyline class="w sig" points="80,370 90,370"/><polyline class="w sig" points="90,370 95.83333333333333,364 107.5,376 119.16666666666666,364 130.83333333333334,376 142.5,364 154.16666666666666,376 160,370"/><polyline class="w sig" points="160,370 170,370"/><text class="val" x="125" y="356" text-anchor="middle">32 kΩ</text><polyline class="w sig" points="170,370 400,370"/><circle class="dot sig" cx="200" cy="370" r="3.5"/><polyline class="w sig" points="200,370 200,385"/><polyline class="w sig" points="200,385 200,395"/><polyline class="w sig" points="200,395 194,397.9166666666667 206,403.75 194,409.58333333333337 206,415.4166666666667 194,421.25 206,427.08333333333337 200,430"/><polyline class="w sig" points="200,430 200,440"/><line class="w sig" x1="186" y1="432" x2="214" y2="394"/><polyline class="w sig" points="186,432 180,432"/><text class="val" x="222" y="408" text-anchor="start">t°</text><polyline class="w gnd" points="200,440 200,452"/><line class="w gnd" x1="190" y1="452" x2="210" y2="452"/><line class="w gnd" x1="194" y1="457" x2="206" y2="457"/><line class="w gnd" x1="197.5" y1="462" x2="202.5" y2="462"/><text class="note" x="184" y="404" text-anchor="end">coil thermistor</text><text class="note" x="184" y="418" text-anchor="end">(the AC’s original,</text><text class="note" x="184" y="432" text-anchor="end">clipped in the fins)</text><polyline class="w sig" points="400,430 350,430"/><circle class="term" cx="350" cy="430" r="3.5"/><circle class="term" cx="310" cy="430" r="3.5"/><line class="w sig" x1="313" y1="428" x2="346" y2="414"/><polyline class="w sig" points="306,430 290,430 290,440"/><polyline class="w gnd" points="290,440 290,452"/><line class="w gnd" x1="280" y1="452" x2="300" y2="452"/><line class="w gnd" x1="284" y1="457" x2="296" y2="457"/><line class="w gnd" x1="287.5" y1="462" x2="292.5" y2="462"/><text class="note" x="330" y="404" text-anchor="middle">override (latching)</text><polyline class="w sig" points="330,490 340,490"/><polyline class="w sig" points="340,490 344.1666666666667,484 352.5,496 360.83333333333337,484 369.1666666666667,496 377.5,484 385.83333333333337,496 390,490"/><polyline class="w sig" points="390,490 400,490"/><text class="val" x="365" y="478" text-anchor="middle">330 Ω</text><polyline class="w sig" points="330,490 318,490"/><polygon class="led" points="318,480 318,500 298,490"/><line class="w sig" x1="296" y1="480" x2="296" y2="500"/><line class="w sig" x1="304" y1="476" x2="312" y2="468"/><line class="w sig" x1="310" y1="480" x2="318" y2="472"/><polyline class="w sig" points="296,490 280,490 280,500"/><polyline class="w gnd" points="280,500 280,512"/><line class="w gnd" x1="270" y1="512" x2="290" y2="512"/><line class="w gnd" x1="274" y1="517" x2="286" y2="517"/><line class="w gnd" x1="277.5" y1="522" x2="282.5" y2="522"/><text class="note" x="340" y="530" text-anchor="middle">status LED</text><rect class="part" x="680" y="20" width="200" height="56" rx="6"/><text class="ptitle" x="692" y="42" text-anchor="start">5 V supply</text><text class="psub" x="692" y="58" text-anchor="start">≥ 1 A, feeds both boards</text><text class="pin" x="700" y="72" text-anchor="middle">+</text><text class="pin" x="840" y="72" text-anchor="middle">−</text><polyline class="w p5" points="700,76 700,170 670,170"/><circle class="dot p5" cx="700" cy="120" r="3.5"/><polyline class="w p5" points="700,120 890,120 890,250"/><polyline class="w gnd" points="840,76 840,86"/><polyline class="w gnd" points="840,86 840,98"/><line class="w gnd" x1="830" y1="98" x2="850" y2="98"/><line class="w gnd" x1="834" y1="103" x2="846" y2="103"/><line class="w gnd" x1="837.5" y1="108" x2="842.5" y2="108"/><rect class="part" x="740" y="250" width="190" height="200" rx="6"/><text class="ptitle" x="752" y="272" text-anchor="start">Relay module</text><text class="psub" x="752" y="288" text-anchor="start">cooling relay: GPIO16</text><polyline class="w p33" points="740,310 728,310"/><rect class="tag p33" x="684" y="300" width="44" height="20" rx="10"/><text class="tagt p33" x="706.0" y="314" text-anchor="middle">3V3</text><text class="pin" x="748" y="314" text-anchor="start">VCC</text><polyline class="w sig" points="670,350 740,350"/><text class="pin" x="748" y="354" text-anchor="start">IN1</text><text class="wl" x="705" y="343" text-anchor="middle">LOW = on</text><text class="pin" x="918" y="268" text-anchor="end">JD-VCC</text><polyline class="w sig" points="670,390 740,390"/><text class="pin" x="748" y="394" text-anchor="start">IN2</text><text class="wl" x="705" y="383" text-anchor="middle">held off</text><rect class="warnbox" x="780" y="374" width="104" height="40" rx="4"/><text class="warn" x="832" y="390" text-anchor="middle">JD-VCC jumper</text><text class="warn" x="832" y="405" text-anchor="middle">REMOVED</text><polyline class="w gnd" points="820,450 820,460"/><polyline class="w gnd" points="820,460 820,472"/><line class="w gnd" x1="810" y1="472" x2="830" y2="472"/><line class="w gnd" x1="814" y1="477" x2="826" y2="477"/><line class="w gnd" x1="817.5" y1="482" x2="822.5" y2="482"/><text class="pin" x="826" y="442" text-anchor="start">GND</text><text class="pin" x="922" y="334" text-anchor="end">COM2</text><text class="pin" x="922" y="374" text-anchor="end">NO2</text><text class="pin" x="922" y="414" text-anchor="end">NC2</text><polyline class="w dim" points="930,410 944,410"/><text class="note" x="950" y="414" text-anchor="start">unused</text><rect class="aczone" x="970" y="186" width="290" height="300" rx="10"/><text class="zlabel" x="984" y="206" text-anchor="start">AC SIDE · keep isolated from the ESP32</text><polyline class="w ac" points="930,330 1010,330"/><polyline class="w ac" points="1010,240 1010,260"/><polyline class="w ac" points="1010,260 1004,264.1666666666667 1016,272.5 1004,280.83333333333337 1016,289.1666666666667 1004,297.5 1016,305.83333333333337 1010,310"/><polyline class="w ac" points="1010,310 1010,330"/><text class="val" x="1022" y="290" text-anchor="start">R_ADD 22 kΩ</text><polyline class="w ac" points="930,370 1040,370 1040,430"/><polyline class="w ac" points="1010,240 1215,240"/><polyline class="w ac" points="1040,430 1215,430"/><circle class="dot ac" cx="1180" cy="240" r="3.5"/><circle class="dot ac" cx="1180" cy="430" r="3.5"/><polyline class="w ac" points="1180,240 1180,305"/><polyline class="w ac" points="1180,305 1174,310.0 1186,320.0 1174,330.0 1186,340.0 1174,350.0 1186,360.0 1180,365"/><polyline class="w ac" points="1180,365 1180,430"/><text class="val" x="1168" y="330" text-anchor="end">R_COLD</text><text class="val" x="1168" y="346" text-anchor="end">35 kΩ</text><rect class="conn" x="1215" y="222" width="32" height="226" rx="4"/><text class="pin" x="1231" y="244" text-anchor="middle">1</text><text class="pin" x="1231" y="434" text-anchor="middle">2</text><text class="ptitle" x="1231" y="340" text-anchor="middle" transform="rotate(-90 1231 335)">CN3</text><text class="note" x="1115" y="472" text-anchor="middle">to the AC’s control board</text></svg>
+  </div>
+  <figcaption>
+    <div class="legend">
+      <span><i style="background: var(--n33)"></i>3.3 V</span>
+      <span><i style="background: var(--n5)"></i>5 V</span>
+      <span><i style="background: var(--sig)"></i>signal</span>
+      <span><i style="background: var(--ink)"></i>ground</span>
+      <span><i style="background: var(--ac)"></i>AC side, isolated</span>
+    </div>
+    Every <b>3V3</b> tag is the same wire as the ESP32’s 3V3 pin, and every ground symbol is the same common ground. Wires that cross without a dot are not connected. Relay open: CN3 sees 35 kΩ (≈ −1 °C), the AC reads a cold room and stops. Relay closed: 35 kΩ ∥ 22 kΩ = 13.6 kΩ (≈ 18 °C), the AC reads a warm room and cools. Set the AC to its minimum setpoint (≈16 °C), between those two.
+  </figcaption>
+</figure>
+
+<figure>
+  <div class="figtitle">AC side: relay 2 to the terminal block, as on your board</div>
+  <div class="stagegrid">
+    <section class="stage">
+      <h3><span class="stagetag">Stage 1</span> Find the values with pots</h3>
+      <div class="scroll block">
+<svg viewBox="0 0 720 590" role="img" aria-label="AC-side wiring, stage 1. Relay 2 terminals NO2 and COM2 connect to a 6-position block: positions 1 and 2 go to the AC CN3 socket; 1, 3 and 5 are linked (node A); 2, 4 and NO2 are linked (node B); COM2 goes to 6. Positions 3 and 4 hold a 50 kilohm pot set to about 35 kilohm; 5 and 6 hold a 50 kilohm pot set to about 14 kilohm. Relay 1 contacts and NC2 are unused."><rect class="board" x="60" y="26" width="510" height="100" rx="8"/><rect class="screw live" x="84" y="40" width="52" height="46" rx="4"/><circle class="screwhead live" cx="110" cy="63" r="11"/><line class="slot live" x1="103" y1="70" x2="117" y2="56"/><text class="tlabel live" x="110" y="104" text-anchor="middle">NO2</text><rect class="screw live" x="154" y="40" width="52" height="46" rx="4"/><circle class="screwhead live" cx="180" cy="63" r="11"/><line class="slot live" x1="173" y1="70" x2="187" y2="56"/><text class="tlabel live" x="180" y="104" text-anchor="middle">COM2</text><rect class="screw idle" x="224" y="40" width="52" height="46" rx="4"/><circle class="screwhead idle" cx="250" cy="63" r="11"/><line class="slot idle" x1="243" y1="70" x2="257" y2="56"/><text class="tlabel idle" x="250" y="104" text-anchor="middle">NC2</text><rect class="screw idle" x="354" y="40" width="52" height="46" rx="4"/><circle class="screwhead idle" cx="380" cy="63" r="11"/><line class="slot idle" x1="373" y1="70" x2="387" y2="56"/><text class="tlabel idle" x="380" y="104" text-anchor="middle">NO1</text><rect class="screw idle" x="424" y="40" width="52" height="46" rx="4"/><circle class="screwhead idle" cx="450" cy="63" r="11"/><line class="slot idle" x1="443" y1="70" x2="457" y2="56"/><text class="tlabel idle" x="450" y="104" text-anchor="middle">COM1</text><rect class="screw idle" x="494" y="40" width="52" height="46" rx="4"/><circle class="screwhead idle" cx="520" cy="63" r="11"/><line class="slot idle" x1="513" y1="70" x2="527" y2="56"/><text class="tlabel idle" x="520" y="104" text-anchor="middle">NC1</text><text class="grp" x="180" y="18" text-anchor="middle">cooling relay (GPIO16)</text><text class="grp idle" x="450" y="18" text-anchor="middle">other relay · not used</text><text class="note" x="250" y="124" text-anchor="start"></text><rect class="board" x="104" y="320" width="542" height="66" rx="8"/><rect class="screw live" x="124" y="330" width="52" height="46" rx="4"/><circle class="screwhead live" cx="150" cy="353" r="11"/><text class="bnum" x="150" y="358" text-anchor="middle">1</text><rect class="screw live" x="214" y="330" width="52" height="46" rx="4"/><circle class="screwhead live" cx="240" cy="353" r="11"/><text class="bnum" x="240" y="358" text-anchor="middle">2</text><rect class="screw live" x="304" y="330" width="52" height="46" rx="4"/><circle class="screwhead live" cx="330" cy="353" r="11"/><text class="bnum" x="330" y="358" text-anchor="middle">3</text><rect class="screw live" x="394" y="330" width="52" height="46" rx="4"/><circle class="screwhead live" cx="420" cy="353" r="11"/><text class="bnum" x="420" y="358" text-anchor="middle">4</text><rect class="screw live" x="484" y="330" width="52" height="46" rx="4"/><circle class="screwhead live" cx="510" cy="353" r="11"/><text class="bnum" x="510" y="358" text-anchor="middle">5</text><rect class="screw live" x="574" y="330" width="52" height="46" rx="4"/><circle class="screwhead live" cx="600" cy="353" r="11"/><text class="bnum" x="600" y="358" text-anchor="middle">6</text><text class="grp" x="195.0" y="402" text-anchor="middle">thermistor</text><text class="grp" x="375.0" y="402" text-anchor="middle">resistor high</text><text class="grp" x="555.0" y="402" text-anchor="middle">resistor low</text><polyline class="w ac" points="110,86 110,250 420,250 420,330"/><polyline class="w ac" points="240,250 240,330"/><circle class="dot ac" cx="240" cy="250" r="4"/><text class="node" x="430" y="244" text-anchor="start">node B</text><path class="w ac" d="M150,290 L233,290 A7,7 0 0 1 247,290 L413,290 A7,7 0 0 1 427,290 L510,290"/><polyline class="w ac" points="150,290 150,330"/><polyline class="w ac" points="330,290 330,330"/><circle class="dot ac" cx="330" cy="290" r="4"/><polyline class="w ac" points="510,290 510,330"/><text class="node" x="520" y="284" text-anchor="start">node A</text><polyline class="w ac" points="180,86 180,200 600,200 600,330"/><text class="node" x="612" y="214" text-anchor="start">COM2 → 6</text><polyline class="w ac" points="150,376 150,530"/><polyline class="w ac" points="240,376 240,530"/><rect class="conn" x="118" y="530" width="154" height="44" rx="6"/><text class="ptitle" x="195" y="550" text-anchor="middle">AC  CN3</text><text class="psub" x="195" y="566" text-anchor="middle">the thermistor socket</text><polyline class="w ac" points="330,376 330,510 420,510 420,490"/><polyline class="w ac" points="420,440 414,444.1666666666667 426,452.5 414,460.83333333333337 426,469.1666666666667 414,477.5 426,485.83333333333337 420,490"/><polyline class="w ac" points="420,440 420,376"/><line class="w ac" x1="444" y1="465" x2="429" y2="465"/><polygon class="arrow" points="428,465 435,461 435,469"/><polyline class="w ac" points="444,465 444,440 420,440"/><circle class="dot ac" cx="420" cy="440" r="4"/><text class="val" x="342" y="458" text-anchor="start">50 kΩ</text><text class="psub" x="342" y="474" text-anchor="start">pot</text><text class="note" x="375.0" y="530" text-anchor="middle">set ≈ 35 kΩ</text><polyline class="w ac" points="510,376 510,510 600,510 600,490"/><polyline class="w ac" points="600,440 594,444.1666666666667 606,452.5 594,460.83333333333337 606,469.1666666666667 594,477.5 606,485.83333333333337 600,490"/><polyline class="w ac" points="600,440 600,376"/><line class="w ac" x1="624" y1="465" x2="609" y2="465"/><polygon class="arrow" points="608,465 615,461 615,469"/><polyline class="w ac" points="624,465 624,440 600,440"/><circle class="dot ac" cx="600" cy="440" r="4"/><text class="val" x="522" y="458" text-anchor="start">50 kΩ</text><text class="psub" x="522" y="474" text-anchor="start">pot</text><text class="note" x="555.0" y="530" text-anchor="middle">set ≈ 14 kΩ</text></svg>
+      </div>
+      <ol>
+        <li><b>Links</b> (protoboard traces or short jumpers): 1 – 3 – 5 together (node A); 2 – 4 – <code>NO2</code> together (node B); <code>COM2</code> → 6. Leave <code>NC2</code> and relay 1 empty.</li>
+        <li>A 50 kΩ pot in <b>3–4</b> (resistor high) and one in <b>5–6</b> (resistor low), each with its wiper tied to one end.</li>
+        <li>AC unplugged and 1–2 disconnected: meter <b>3–4</b> and set it to your cold value (≈35 kΩ); meter <b>5–6</b> and set it to ≈14 kΩ. Never plug the AC in with either pot near 0 Ω: CN3 would read as a shorted sensor.</li>
+        <li>Check <b>1–2</b>: ≈35 kΩ with the relay off, ≈13.6 kΩ with it on (as built: 35 k high, 22 k low).</li>
+        <li>Connect 1–2 to CN3 and run the AC. Nudge the pots until it starts reliably with the relay on and stops with it off.</li>
+        <li>AC unplugged, 1–2 disconnected, relay off: meter <b>3–4</b> and <b>5–6</b> and write both values down.</li>
+      </ol>
+    </section>
+    <section class="stage">
+      <h3><span class="stagetag">Stage 2</span> Fit the fixed resistors</h3>
+      <div class="scroll block">
+<svg viewBox="0 0 720 590" role="img" aria-label="AC-side wiring, stage 2. Relay 2 terminals NO2 and COM2 connect to a 6-position block: positions 1 and 2 go to the AC CN3 socket; 1, 3 and 5 are linked (node A); 2, 4 and NO2 are linked (node B); COM2 goes to 6. Positions 3 and 4 hold fixed resistor R_COLD and 5 and 6 hold fixed resistor R_ADD, at the values found with the pots. Relay 1 contacts and NC2 are unused."><rect class="board" x="60" y="26" width="510" height="100" rx="8"/><rect class="screw live" x="84" y="40" width="52" height="46" rx="4"/><circle class="screwhead live" cx="110" cy="63" r="11"/><line class="slot live" x1="103" y1="70" x2="117" y2="56"/><text class="tlabel live" x="110" y="104" text-anchor="middle">NO2</text><rect class="screw live" x="154" y="40" width="52" height="46" rx="4"/><circle class="screwhead live" cx="180" cy="63" r="11"/><line class="slot live" x1="173" y1="70" x2="187" y2="56"/><text class="tlabel live" x="180" y="104" text-anchor="middle">COM2</text><rect class="screw idle" x="224" y="40" width="52" height="46" rx="4"/><circle class="screwhead idle" cx="250" cy="63" r="11"/><line class="slot idle" x1="243" y1="70" x2="257" y2="56"/><text class="tlabel idle" x="250" y="104" text-anchor="middle">NC2</text><rect class="screw idle" x="354" y="40" width="52" height="46" rx="4"/><circle class="screwhead idle" cx="380" cy="63" r="11"/><line class="slot idle" x1="373" y1="70" x2="387" y2="56"/><text class="tlabel idle" x="380" y="104" text-anchor="middle">NO1</text><rect class="screw idle" x="424" y="40" width="52" height="46" rx="4"/><circle class="screwhead idle" cx="450" cy="63" r="11"/><line class="slot idle" x1="443" y1="70" x2="457" y2="56"/><text class="tlabel idle" x="450" y="104" text-anchor="middle">COM1</text><rect class="screw idle" x="494" y="40" width="52" height="46" rx="4"/><circle class="screwhead idle" cx="520" cy="63" r="11"/><line class="slot idle" x1="513" y1="70" x2="527" y2="56"/><text class="tlabel idle" x="520" y="104" text-anchor="middle">NC1</text><text class="grp" x="180" y="18" text-anchor="middle">cooling relay (GPIO16)</text><text class="grp idle" x="450" y="18" text-anchor="middle">other relay · not used</text><text class="note" x="250" y="124" text-anchor="start"></text><rect class="board" x="104" y="320" width="542" height="66" rx="8"/><rect class="screw live" x="124" y="330" width="52" height="46" rx="4"/><circle class="screwhead live" cx="150" cy="353" r="11"/><text class="bnum" x="150" y="358" text-anchor="middle">1</text><rect class="screw live" x="214" y="330" width="52" height="46" rx="4"/><circle class="screwhead live" cx="240" cy="353" r="11"/><text class="bnum" x="240" y="358" text-anchor="middle">2</text><rect class="screw live" x="304" y="330" width="52" height="46" rx="4"/><circle class="screwhead live" cx="330" cy="353" r="11"/><text class="bnum" x="330" y="358" text-anchor="middle">3</text><rect class="screw live" x="394" y="330" width="52" height="46" rx="4"/><circle class="screwhead live" cx="420" cy="353" r="11"/><text class="bnum" x="420" y="358" text-anchor="middle">4</text><rect class="screw live" x="484" y="330" width="52" height="46" rx="4"/><circle class="screwhead live" cx="510" cy="353" r="11"/><text class="bnum" x="510" y="358" text-anchor="middle">5</text><rect class="screw live" x="574" y="330" width="52" height="46" rx="4"/><circle class="screwhead live" cx="600" cy="353" r="11"/><text class="bnum" x="600" y="358" text-anchor="middle">6</text><text class="grp" x="195.0" y="402" text-anchor="middle">thermistor</text><text class="grp" x="375.0" y="402" text-anchor="middle">resistor high</text><text class="grp" x="555.0" y="402" text-anchor="middle">resistor low</text><polyline class="w ac" points="110,86 110,250 420,250 420,330"/><polyline class="w ac" points="240,250 240,330"/><circle class="dot ac" cx="240" cy="250" r="4"/><text class="node" x="430" y="244" text-anchor="start">node B</text><path class="w ac" d="M150,290 L233,290 A7,7 0 0 1 247,290 L413,290 A7,7 0 0 1 427,290 L510,290"/><polyline class="w ac" points="150,290 150,330"/><polyline class="w ac" points="330,290 330,330"/><circle class="dot ac" cx="330" cy="290" r="4"/><polyline class="w ac" points="510,290 510,330"/><text class="node" x="520" y="284" text-anchor="start">node A</text><polyline class="w ac" points="180,86 180,200 600,200 600,330"/><text class="node" x="612" y="214" text-anchor="start">COM2 → 6</text><polyline class="w ac" points="150,376 150,530"/><polyline class="w ac" points="240,376 240,530"/><rect class="conn" x="118" y="530" width="154" height="44" rx="6"/><text class="ptitle" x="195" y="550" text-anchor="middle">AC  CN3</text><text class="psub" x="195" y="566" text-anchor="middle">the thermistor socket</text><polyline class="w ac" points="330,376 330,510 420,510 420,490"/><polyline class="w ac" points="420,440 414,444.1666666666667 426,452.5 414,460.83333333333337 426,469.1666666666667 414,477.5 426,485.83333333333337 420,490"/><polyline class="w ac" points="420,440 420,376"/><text class="val" x="342" y="458" text-anchor="start">R_COLD</text><text class="psub" x="342" y="474" text-anchor="start">fixed</text><text class="note" x="375.0" y="530" text-anchor="middle">your 3–4 value</text><polyline class="w ac" points="510,376 510,510 600,510 600,490"/><polyline class="w ac" points="600,440 594,444.1666666666667 606,452.5 594,460.83333333333337 606,469.1666666666667 594,477.5 606,485.83333333333337 600,490"/><polyline class="w ac" points="600,440 600,376"/><text class="val" x="522" y="458" text-anchor="start">R_ADD</text><text class="psub" x="522" y="474" text-anchor="start">fixed</text><text class="note" x="555.0" y="530" text-anchor="middle">your 5–6 value</text></svg>
+      </div>
+      <ol>
+        <li>AC unplugged. Take both pots out; the links, relay wires and 1–2 stay as they are.</li>
+        <li><b>3–4</b>: one resistor (R_COLD) at the value you wrote down for 3–4. <b>5–6</b>: one resistor (R_ADD) at the value for 5–6.</li>
+        <li>Nearest precision (1%) value is fine, or two resistors in series to hit an odd value (e.g. 33 k + 2.2 k).</li>
+        <li>Re-check <b>1–2</b>: the same readings as stage 1 with the relay off and on. Then reconnect CN3.</li>
+      </ol>
+    </section>
+  </div>
+  <figcaption>Everything in this drawing is on the AC side. None of these positions may connect to the ESP32 or its supply. The coil thermistor goes to the ESP32’s GPIO35 divider, not to this block.</figcaption>
+</figure>
+
+<figure>
+  <div class="figtitle">Header map, as the board sits (module up, USB-C down)</div>
+  <div class="scroll map">
+<svg viewBox="0 0 1000 580" role="img" aria-label="Header map of the 38-pin ESP32-WROOM-32U board, module at the top and USB-C at the bottom. Left header: 3V3 (row 1), GPIO35 (row 6) thermistor, GPIO32 (row 7) LED, GPIO33 (row 8) SDA, GND (row 14) and 5V (row 19) are used. Right header: GPIO22 (row 3) SCL, GPIO21 (row 6) override switch, GPIO19 (row 8) unused relay input, GPIO16 (row 12) cooling relay input. Pins 5, 17, 18, 23, 25, 26 and 27 are not available."><rect class="part" x="400" y="40" width="300" height="516" rx="8"/><rect class="module" x="490" y="54" width="120" height="130" rx="3"/><text class="ptitle" x="550.0" y="112" text-anchor="middle">WROOM-32U</text><text class="psub" x="550.0" y="128" text-anchor="middle">antenna socket</text><rect class="usb" x="520.0" y="528" width="60" height="34" rx="6"/><text class="psub" x="550.0" y="518" text-anchor="middle">USB-C</text><circle class="hp p33" cx="418" cy="84" r="6"/><text class="hn p33" x="432" y="88" text-anchor="start">3V3</text><polyline class="w p33" points="418,84 370,84"/><text class="co" x="362" y="88" text-anchor="end">3V3 → SHT30 VIN, relay VCC, 33 kΩ</text><circle class="hp free" cx="682" cy="84" r="6"/><text class="hn free" x="668" y="88" text-anchor="end">GND</text><circle class="hp avoid" cx="418" cy="108" r="6"/><text class="hn avoid" x="432" y="112" text-anchor="start">EN</text><circle class="hp nc" cx="682" cy="108" r="6"/><text class="hn nc" x="668" y="112" text-anchor="end">23</text><circle class="hp free" cx="418" cy="132" r="6"/><text class="hn free" x="432" y="136" text-anchor="start">VP</text><circle class="hp sig" cx="682" cy="132" r="6"/><text class="hn sig" x="668" y="136" text-anchor="end">22</text><polyline class="w sig" points="682,132 730,132"/><text class="co" x="738" y="136" text-anchor="start">SHT30 SCL</text><circle class="hp free" cx="418" cy="156" r="6"/><text class="hn free" x="432" y="160" text-anchor="start">VN</text><circle class="hp avoid" cx="682" cy="156" r="6"/><text class="hn avoid" x="668" y="160" text-anchor="end">TX</text><circle class="hp free" cx="418" cy="180" r="6"/><text class="hn free" x="432" y="184" text-anchor="start">34</text><circle class="hp avoid" cx="682" cy="180" r="6"/><text class="hn avoid" x="668" y="184" text-anchor="end">RX</text><circle class="hp sig" cx="418" cy="204" r="6"/><text class="hn sig" x="432" y="208" text-anchor="start">35</text><polyline class="w sig" points="418,204 370,204"/><text class="co" x="362" y="208" text-anchor="end">coil thermistor divider (33 kΩ / thermistor)</text><circle class="hp sig" cx="682" cy="204" r="6"/><text class="hn sig" x="668" y="208" text-anchor="end">21</text><polyline class="w sig" points="682,204 730,204"/><text class="co" x="738" y="208" text-anchor="start">override switch → GND</text><circle class="hp sig" cx="418" cy="228" r="6"/><text class="hn sig" x="432" y="232" text-anchor="start">32</text><polyline class="w sig" points="418,228 370,228"/><text class="co" x="362" y="232" text-anchor="end">330 Ω → status LED → GND</text><circle class="hp free" cx="682" cy="228" r="6"/><text class="hn free" x="668" y="232" text-anchor="end">GND</text><circle class="hp sig" cx="418" cy="252" r="6"/><text class="hn sig" x="432" y="256" text-anchor="start">33</text><polyline class="w sig" points="418,252 370,252"/><text class="co" x="362" y="256" text-anchor="end">SHT30 SDA</text><circle class="hp sig" cx="682" cy="252" r="6"/><text class="hn sig" x="668" y="256" text-anchor="end">19</text><polyline class="w sig" points="682,252 730,252"/><text class="co" x="738" y="256" text-anchor="start">other relay input (unused, held off)</text><circle class="hp nc" cx="418" cy="276" r="6"/><text class="hn nc" x="432" y="280" text-anchor="start">25</text><circle class="hp nc" cx="682" cy="276" r="6"/><text class="hn nc" x="668" y="280" text-anchor="end">18</text><circle class="hp nc" cx="418" cy="300" r="6"/><text class="hn nc" x="432" y="304" text-anchor="start">26</text><circle class="hp nc" cx="682" cy="300" r="6"/><text class="hn nc" x="668" y="304" text-anchor="end">5</text><circle class="hp nc" cx="418" cy="324" r="6"/><text class="hn nc" x="432" y="328" text-anchor="start">27</text><circle class="hp nc" cx="682" cy="324" r="6"/><text class="hn nc" x="668" y="328" text-anchor="end">17</text><circle class="hp avoid" cx="418" cy="348" r="6"/><text class="hn avoid" x="432" y="352" text-anchor="start">14</text><circle class="hp sig" cx="682" cy="348" r="6"/><text class="hn sig" x="668" y="352" text-anchor="end">16</text><polyline class="w sig" points="682,348 730,348"/><text class="co" x="738" y="352" text-anchor="start">cooling relay input (low = closed)</text><circle class="hp avoid" cx="418" cy="372" r="6"/><text class="hn avoid" x="432" y="376" text-anchor="start">12</text><circle class="hp free" cx="682" cy="372" r="6"/><text class="hn free" x="668" y="376" text-anchor="end">4</text><circle class="hp gnd" cx="418" cy="396" r="6"/><text class="hn gnd" x="432" y="400" text-anchor="start">GND</text><polyline class="w gnd" points="418,396 370,396"/><text class="co" x="362" y="400" text-anchor="end">common ground (every GND joins here)</text><circle class="hp avoid" cx="682" cy="396" r="6"/><text class="hn avoid" x="668" y="400" text-anchor="end">0</text><circle class="hp free" cx="418" cy="420" r="6"/><text class="hn free" x="432" y="424" text-anchor="start">13</text><circle class="hp avoid" cx="682" cy="420" r="6"/><text class="hn avoid" x="668" y="424" text-anchor="end">2</text><circle class="hp avoid" cx="418" cy="444" r="6"/><text class="hn avoid" x="432" y="448" text-anchor="start">D2</text><circle class="hp avoid" cx="682" cy="444" r="6"/><text class="hn avoid" x="668" y="448" text-anchor="end">15</text><circle class="hp avoid" cx="418" cy="468" r="6"/><text class="hn avoid" x="432" y="472" text-anchor="start">D3</text><circle class="hp avoid" cx="682" cy="468" r="6"/><text class="hn avoid" x="668" y="472" text-anchor="end">D1</text><circle class="hp avoid" cx="418" cy="492" r="6"/><text class="hn avoid" x="432" y="496" text-anchor="start">CMD</text><circle class="hp avoid" cx="682" cy="492" r="6"/><text class="hn avoid" x="668" y="496" text-anchor="end">D0</text><circle class="hp p5" cx="418" cy="516" r="6"/><text class="hn p5" x="432" y="520" text-anchor="start">5V</text><polyline class="w p5" points="418,516 370,516"/><text class="co" x="362" y="520" text-anchor="end">5 V supply + (also relay JD-VCC)</text><circle class="hp avoid" cx="682" cy="516" r="6"/><text class="hn avoid" x="668" y="520" text-anchor="end">CLK</text></svg>
+  </div>
+  <figcaption>
+    Filled pins are used. <b>Struck-through red pins (5, 17, 18, 23, 25, 26, 27) are not available on this carrier board: never use them.</b> Dashed pins are boot-strapping, boot-pulsing or flash pins: leave them free (keep relay wires off 12 and 14). Only one GND pin is needed, since every ground joins on the common ground.
+  </figcaption>
+</figure>
+
+<div class="cols">
+  <section class="card">
+    <h2>Connections</h2>
+    <div class="tbl">
+    <table>
+      <thead><tr><th>From</th><th>To</th><th>Note</th></tr></thead>
+      <tbody>
+        <tr class="group"><td colspan="3">Power</td></tr>
+        <tr><td><span class="chip" style="background: var(--n5)"></span>5 V supply +</td><td class="m">ESP32 5V</td><td>and relay JD-VCC</td></tr>
+        <tr><td>5 V supply −</td><td class="m">ESP32 GND</td><td>one common ground for everything</td></tr>
+        <tr class="group"><td colspan="3">Relay module</td></tr>
+        <tr><td class="m">VCC</td><td class="m">ESP32 3V3</td><td>jumper removed, so this only powers the optocoupler</td></tr>
+        <tr><td class="m">IN (cooling)</td><td class="m">GPIO16</td><td>low = closed = cooling requested; switches the COM2/NO2 pair feeding the block</td></tr>
+        <tr><td class="m">IN (other)</td><td class="m">GPIO19</td><td>unused; the firmware holds it off</td></tr>
+        <tr><td class="m">JD-VCC</td><td>5 V supply +</td><td>powers the relay coil</td></tr>
+        <tr><td class="m">GND</td><td>common ground</td><td>the GND next to JD-VCC</td></tr>
+        <tr class="group"><td colspan="3">Sensors and controls</td></tr>
+        <tr><td>SHT30 VIN / GND</td><td class="m">3V3 / GND</td><td></td></tr>
+        <tr><td>SHT30 SDA / SCL</td><td class="m">GPIO33 / GPIO22</td><td>address 0x44</td></tr>
+        <tr><td>3V3 → 32 kΩ (22 k + 10 k) → node</td><td class="m">GPIO35</td><td>node → coil thermistor → GND</td></tr>
+        <tr><td>Override switch</td><td class="m">GPIO21 ↔ GND</td><td>latching; closed = override</td></tr>
+        <tr><td>LED + 330 Ω</td><td class="m">GPIO32 → GND</td><td>long leg (anode) toward GPIO32</td></tr>
+        <tr class="group"><td colspan="3">AC side (CN3)</td></tr>
+        <tr><td>35 kΩ</td><td>CN3 pin 1 ↔ pin 2</td><td>always connected</td></tr>
+        <tr><td>22 kΩ + relay COM2/NO2</td><td>CN3 pin 1 ↔ pin 2</td><td>in series with each other, in parallel with the 35 kΩ</td></tr>
+        <tr><td class="m">NC2, other relay</td><td>nothing</td><td>leave empty</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <div class="stack">
+    <section class="card danger">
+      <h2>Before you plug in the AC</h2>
+      <ol>
+        <li>The <b>JD-VCC jumper</b> must be off the relay board (done) before VCC goes to 3.3 V.</li>
+        <li>With the AC unplugged, meter the CN3 leads: about <b>35 kΩ</b> with the relay open and about <b>13.6 kΩ</b> with it closed.</li>
+        <li>Check there is <b>no continuity</b> from either CN3 lead to the ESP32’s GND or 3V3. The AC board’s isolation from mains is unknown, so nothing on that side may touch the ESP32.</li>
+        <li>Keep the relay and the resistor network away from the AC’s refrigerant lines. It runs on R32, which is flammable, and the manual warns against sparking switches nearby.</li>
+      </ol>
+      <p class="small">The rest of the bench and install checks are in <code>RULES-v4.md</code>.</p>
+    </section>
+
+    <section class="card">
+      <h2>Parts</h2>
+      <div class="tbl">
+      <table>
+        <tbody>
+          <tr><td>ESP32-WROOM-32U DevKit</td><td>38-pin, USB-C; keep the external antenna fitted</td></tr>
+          <tr><td>SHT30 breakout</td><td>box air temperature and humidity</td></tr>
+          <tr><td>2-channel 5 V relay module</td><td>B00XAGT2OG, channel 1 only</td></tr>
+          <tr><td>AC’s original thermistor</td><td>moved from CN3 into the coil fins</td></tr>
+          <tr><td class="m">22 kΩ + 10 kΩ</td><td>fin divider pull-up (32 kΩ)</td></tr>
+          <tr><td class="m">35 kΩ</td><td>R_COLD. Not a standard value: use 34.8 kΩ (E96) or 33 k + 2.2 k in series</td></tr>
+          <tr><td class="m">22 kΩ</td><td>R_ADD as built (closed 13.6 kΩ). Use 14 kΩ (6 k + 8 k) instead if the AC’s minimum setpoint is above ≈17 °C</td></tr>
+          <tr><td class="m">330 Ω</td><td>LED resistor</td></tr>
+          <tr><td>LED, latching switch</td><td>status, override</td></tr>
+          <tr><td>5 V supply, ≥ 1 A</td><td>feeds the ESP32 and the relay coil</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="small">35 kΩ and 14 kΩ come from your measurements of the original thermistor. What matters is the network: aim for your measured cold value open and your warm value closed.</p>
+    </section>
+  </div>
+</div>
+</div>
+
+</body>
+</html>

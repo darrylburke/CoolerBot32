@@ -1,0 +1,392 @@
+# v4 single-relay walk-in cooler controller (ESP32-WROOM-32U, 38-pin DevKit, USB-C).
+# Rules: ../RULES-v4.md. Design: ../docs/superpowers/specs/2026-09-26-single-relay-controller-design.md
+#
+# This file is wiring and I/O only. Every control decision lives in
+# cooler_logic.h, which is unit-tested on the host (tests/).
+
+substitutions:
+  device_name: esp32-cooler
+  ovr_on_c: "5.0"
+  ovr_off_c: "3.0"
+
+esphome:
+  name: ${device_name}
+  includes:
+    - cooler_logic.h
+    - cooler_esphome.h
+  platformio_options:
+    build_flags:
+      - "-DCOOLER_OVR_ON_C=${ovr_on_c}f"
+      - "-DCOOLER_OVR_OFF_C=${ovr_off_c}f"
+  on_boot:
+    priority: -100
+    then:
+      - switch.turn_off: relay
+      - lambda: 'cooler_glue::load();'
+
+esp32:
+  board: esp32dev
+  framework:
+    # esp-idf: ESPHome only supports mqtt certificate_authority (TLS with the
+    # private CA on the broker) on esp-idf.
+    type: esp-idf
+
+globals:
+  # Settings, FinCal and the logic state are NOT globals: see cooler_esphome.h.
+
+  # ---- history (same semantics as v3 RULES.md), persisted ----
+  - { id: temp_hist,    type: 'int[20]', restore_value: yes }
+  - { id: hum_hist,     type: 'int[20]', restore_value: yes }
+  - { id: hist_n,       type: int,      restore_value: yes, initial_value: '0' }
+  - { id: hist_last_ts, type: uint32_t, restore_value: yes, initial_value: '0' }
+  - { id: sample_ctr,   type: int,      restore_value: no,  initial_value: '0' }
+
+  # ---- runtime ----
+  - { id: g_dirty,   type: int,                restore_value: no, initial_value: '1' }
+  # millis() of the SHT30's last delivered reading. sht3xd keeps the old value
+  # when the sensor dies, so the logic needs the reading's AGE (review fix).
+  - { id: g_sht_ms,  type: uint32_t,           restore_value: no, initial_value: '0' }
+
+wifi:
+  # The cooler's network first, then the bench network; ESPHome joins
+  # whichever is in range.
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+    - ssid: !secret wifi_ssid_dev
+      password: !secret wifi_password_dev
+  ap:
+    ssid: ${device_name}
+    password: !secret ap_password
+
+captive_portal:
+
+time:
+  - platform: sntp
+    id: sntp_time
+
+logger:
+  level: INFO
+  logs:
+    mqtt.client: ERROR
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+
+mqtt:
+  id: mqtt_client
+  # The broker, over TLS, verified against the private CA below.
+  broker: !secret mqtt_broker
+  port: 8883
+  certificate_authority: |-
+    -----BEGIN CERTIFICATE-----
+    MIIFGTCCAwGgAwIBAgIUVKdZQk7kxXrT6CBzYLbAMNSsYCUwDQYJKoZIhvcNAQEL
+    BQAwHDEaMBgGA1UEAwwRTExNTW9uIFByaXZhdGUgQ0EwHhcNMjYwNzEyMDEwNTM3
+    WhcNMzYwNzA5MDEwNTM3WjAcMRowGAYDVQQDDBFMTE1Nb24gUHJpdmF0ZSBDQTCC
+    AiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBALHcWZhVJLKQ5pFE6rKgBIQN
+    5wtbmGx3Og5BNK5A76Pm0PZEGHQ8XzMSQXV61JPIKIt5xjb4Rv+NjDCgGADdM7yH
+    Z/eZfDQ1vWp8DyAgqwK03BgeNMFn57BFUkoOryqHbfVY8pX2FlgXeiILmU18siQd
+    3AZ2Bt9uuLCujyT9KXLFXRaDf1jrBrYb+DVcyN7AdgPwuGvoCz2hqIxfLnpFqnXS
+    vKqWxYjhc8mz4BbkByi8nMcocu+OCFIKF83r5i3yB6nb19cR/84C4kW8sFKAqp4d
+    j8ynXvoKTkKYecJsAGd/S/XiuhQI4pYmRItbIEB/u7qnoXOMNoKUii9r7YoYp041
+    /tqW9CVfYWpiml20/Ue0zFh+XmqMhJBF3toUAKrWjGg7Glhy1NJN3jsgs/CvY+1o
+    UzNiCyp0Rrnejs9ziocF/h9xwUfgIGoaNk3ygK1JzVm6gI+rLekeJfqRNS6rwP9D
+    H1Vw+aOFhG3D3aduYM4Nh2/aWWyIUI5MkeNx84ZxyLNSGT+G7b524XOUgVyMM3Cv
+    HnGl8U7fXGiowPATs4+53n4LJkwsC94i/MjtUkBlV+VXfby1geo4rjfDYa6a4JCH
+    ubQzefo4KSfxDms0AsLTKI88Wd5ONIVctF5tSp3v7pBp7IKf2tDwvVVGYwSCQCnK
+    ItDxrEJARE9+2d9XR/8dAgMBAAGjUzBRMB0GA1UdDgQWBBTs9JfPNPGgrbps0LqH
+    5dx32eqAqDAfBgNVHSMEGDAWgBTs9JfPNPGgrbps0LqH5dx32eqAqDAPBgNVHRMB
+    Af8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4ICAQAxNL6vjZv9mXZFqWVgA2vl0w1p
+    68yNWVqk6YFqwRnhS48NNaTdvWZHdYpTKTqZpXpIJZ2Wlge3z+g9dvVf7G8kDNwU
+    MrGX3qDHhcK4zsr47UAqp7/R1v3DPmDxnNw3TNC1FDRgnP0oa2wDpzqGlDxeDMFT
+    vIDhhINxR/JkQ1t2V0c/m8DUeI7NT5pvmAjpvRoBavMwC/bZRCI9JCC6v6+L/6fL
+    Iv3zoZc5nbLSh7rQ9AlBnfwsXUH84nur3pBQExMyJFPRF7OUnD0QCmNAklI/QYlS
+    nfo0U+vwAuK+iIrHMfFyqtv44sqjlOXMwkhVpS/XNAIuB6IPLixeNNfJ2sfnAftb
+    chk9h1OuBGaHIM9fYekKR6GavEPyIzymaGsuyLgyfCd1TBfKcUGBbsh8uxOQbvrK
+    tZ/n7qyviQHMhevgax+p0Q4MiV0arWUPJSMuGE88MY+NjzGvvCOCrsrgNSpqvosN
+    b2fgBG3MhrKx4lS5V+9qzFBoDMSPuUwo6rfBczemVEz55y33voPhvdecPdIoYMD3
+    /kGLnJ13uPYnpXW5R6bZcqxgdViDd2GuBUrxyVNwdztVzTjUTgKA0yLxZMVfMrf+
+    SG1raTAPLA6zV9lE8CUofZQYMCAp4E8LQu996HshqRx3Uo3sfmXF3Wypicw7Q47V
+    bHLsN6m0Mhe/AYEskQ==
+    -----END CERTIFICATE-----
+  skip_cert_cn_check: false
+  username: !secret mqtt_username
+  password: !secret mqtt_password
+  keepalive: 15s
+  # Never reboot on a lost broker: the link-lost override (spec §2.2) must keep
+  # running its latches and timers through the outage. ESPHome's default
+  # (15 min) would reset them every 15 min.
+  reboot_timeout: 0s
+  client_id: ${device_name}
+  # Everything lives under cooler/ -- the broker ACL grants this account
+  # cooler/# only. No Home Assistant discovery (it publishes outside cooler/).
+  topic_prefix: "cooler"
+  discovery: false
+  birth_message:
+    topic: cooler/availability
+    payload: online
+    retain: true
+  will_message:
+    topic: cooler/availability
+    payload: offline
+    retain: true
+  on_connect:
+    - lambda: 'id(g_dirty) = 1;'
+  on_json_message:
+    - topic: cooler/cmd
+      then:
+        - lambda: |-
+            cooler::Settings &s = cooler_glue::settings();
+            if (x["coolerset"].is<int>())      s.coolerset      = x["coolerset"].as<int>();
+            if (x["range"].is<int>())          s.range          = x["range"].as<int>();
+            if (x["fin_cutoff"].is<int>())     s.fin_cutoff     = x["fin_cutoff"].as<int>();
+            if (x["fin_recover"].is<int>())    s.fin_recover    = x["fin_recover"].as<int>();
+            if (x["settle"].is<int>())         s.settle         = x["settle"].as<int>();
+            if (x["minofftime"].is<int>())     s.minofftime     = x["minofftime"].as<int>();
+            if (x["minruntime"].is<int>())     s.minruntime     = x["minruntime"].as<int>();
+            if (x["maxrun"].is<int>())         s.maxrun         = x["maxrun"].as<int>();
+            if (x["dutypercent"].is<int>())    s.dutypercent    = x["dutypercent"].as<int>();
+            if (x["sampleinterval"].is<int>()) s.sampleinterval = x["sampleinterval"].as<int>();
+            cooler::clamp_settings(s);
+            cooler_glue::save_settings();
+
+            // Only 1 (start) and 0 (abort) mean anything; a start during a
+            // run is ignored by cal_start() so collected points survive.
+            if (x["calibrate"].is<int>()) {
+              const int c = x["calibrate"].as<int>();
+              if (c == 1) cooler::cal_start(cooler_glue::logic());
+              else if (c == 0) cooler::cal_abort(cooler_glue::logic());
+            }
+            if (x["fincal_reset"].is<int>() && x["fincal_reset"].as<int>() == 1) {
+              cooler::fincal_reset(cooler_glue::fincal());
+              cooler_glue::save_fincal();
+            }
+            if (x["clearhist"].is<int>() && x["clearhist"].as<int>() == 1) {
+              id(hist_n) = 0; id(sample_ctr) = 0;
+            }
+            id(g_dirty) = 1;
+        - script.execute: control
+
+switch:
+  - platform: gpio
+    id: relay
+    # The cooling relay is the one wired to the AC-side terminal block.
+    # Bench-checked 2026-09-28: that relay is driven by GPIO16.
+    # Internal: no MQTT command topic. Only cooler_logic.h may drive the relay;
+    # a remote toggle would bypass minofftime and the override thermostat.
+    internal: true
+    # Low-level-trigger module: pin LOW = relay closed. Inverted so ON = closed.
+    pin: { number: GPIO16, inverted: true }
+    restore_mode: ALWAYS_OFF
+  # The other relay channel is wired but unused. Driven HIGH (off) so it can
+  # never energise; internal, so nothing remote can turn it on.
+  - platform: gpio
+    id: relay_unused
+    internal: true
+    pin: { number: GPIO19, inverted: true }
+    restore_mode: ALWAYS_OFF
+
+output:
+  - platform: gpio
+    id: status_led
+    pin: GPIO32
+
+binary_sensor:
+  - platform: gpio
+    id: override_sw
+    name: "Override Switch"
+    # Latching switch to GND. Closed = override on.
+    pin:
+      number: GPIO21
+      inverted: true
+      mode: { input: true, pullup: true }
+    filters:
+      - delayed_on_off: 50ms
+    # Fire on_state for the reading taken at boot too, not only on later
+    # changes -- otherwise a switch left closed through a power cycle is missed.
+    publish_initial_state: true
+    on_state:
+      - script.execute: control
+
+i2c:
+  # Board note: header pins 5, 17, 18, 23, 25, 26 and 27 are not available on
+  # this carrier board -- never assign them.
+  sda: GPIO33
+  scl: GPIO22
+  scan: true
+  # 10 kHz: at 100 kHz the SHT30 on its cable did not answer (bench-tested
+  # 2026-09-28); it answers reliably at 10 kHz. Adding 4.7-10 kOhm pull-ups on
+  # SDA/SCL to 3V3 gives more margin.
+  frequency: 10khz
+
+sensor:
+  - platform: sht3xd
+    address: 0x44
+    update_interval: 10s
+    temperature:
+      id: sht30t
+      name: "Cooler Temperature"
+      on_value:
+        - lambda: 'id(g_sht_ms) = millis();'
+    humidity:    { id: sht30h, name: "Cooler Humidity" }
+
+  - platform: uptime
+    id: uptime_s
+    internal: true
+    update_interval: 30s
+
+  - platform: adc
+    id: fin_adc
+    pin: GPIO35
+    attenuation: 12db
+    update_interval: 5s
+    internal: true
+
+script:
+  - id: control
+    mode: queued
+    max_runs: 3
+    then:
+      - lambda: |-
+          cooler::Inputs in;
+          in.box_valid = !std::isnan(id(sht30t).state);
+          in.box_c = id(sht30t).state;
+          in.box_age_ms = millis() - id(g_sht_ms);
+          in.fin_volts = id(fin_adc).state;
+          in.switch_closed = id(override_sw).state;
+          in.mqtt_connected = id(mqtt_client).is_connected();
+
+          cooler::FinCal &c = cooler_glue::fincal();
+          const cooler::FinCal before = c;
+          cooler::Outputs o = cooler::step(in, cooler_glue::settings(), c, cooler_glue::logic(), millis());
+          cooler_glue::out() = o;
+
+          if (c.calibrated != before.calibrated || c.beta != before.beta || c.r0 != before.r0 ||
+              std::isnan(c.last_err) != std::isnan(before.last_err) ||
+              (!std::isnan(c.last_err) && c.last_err != before.last_err)) {
+            cooler_glue::save_fincal();
+            id(g_dirty) = 1;
+          }
+          if (o.relay != id(relay).state) {
+            if (o.relay) id(relay).turn_on(); else id(relay).turn_off();
+          }
+          if (o.publish_now) id(g_dirty) = 1;
+
+  - id: publish_state
+    mode: single
+    then:
+      - lambda: 'id(g_dirty) = 0;'
+      - mqtt.publish_json:
+          topic: "cooler/data"
+          retain: true
+          payload: |-
+            const cooler::Outputs &o = cooler_glue::out();
+            auto num_or_null = [&](const char *k, float v) {
+              if (std::isnan(v)) root[k] = nullptr; else root[k] = v;
+            };
+            root["v"] = 2;
+            // A stale SHT30 value is not a reading: publish null, same as NaN.
+            num_or_null("temp", o.box_valid ? id(sht30t).state : NAN);
+            num_or_null("humidity", o.box_valid ? id(sht30h).state : NAN);
+            num_or_null("fin_temp", o.fin_c);
+            num_or_null("fin_ohms", o.fin_ohms);
+            num_or_null("fin_slope", o.fin_slope);
+            root["mode"]         = cooler::mode_str(o.mode);
+            root["override_src"] = cooler::ovr_str(o.override_src);
+            root["state"]        = cooler::state_str(o.state);
+            root["relay"]        = o.relay ? 1 : 0;
+            root["cool_call"]    = o.cool_call ? 1 : 0;
+            root["defrost"]      = o.defrost ? 1 : 0;
+            if (o.compressor < 0) root["compressor"] = nullptr; else root["compressor"] = o.compressor;
+            root["sht_fault"]    = o.sht_fault ? 1 : 0;
+            root["fin_fault"]    = o.fin_fault ? 1 : 0;
+            root["no_response"]  = o.no_response ? 1 : 0;
+            root["run_s"]        = o.run_s;
+            root["off_s"]        = o.off_s;
+            root["hold_s"]       = o.hold_s;
+
+            const cooler::Settings &s = cooler_glue::settings();
+            root["coolerset"]      = s.coolerset;
+            root["range"]          = s.range;
+            root["maxrun"]         = s.maxrun;
+            root["dutypercent"]    = s.dutypercent;
+            root["minofftime"]     = s.minofftime;
+            root["minruntime"]     = s.minruntime;
+            root["sampleinterval"] = s.sampleinterval;
+            root["fin_cutoff"]     = s.fin_cutoff;
+            root["fin_recover"]    = s.fin_recover;
+            root["settle"]         = s.settle;
+
+            const cooler::FinCal &c = cooler_glue::fincal();
+            root["fin_cal"]  = c.calibrated ? 1 : 0;
+            root["fin_beta"] = c.beta;
+            root["fin_r0"]   = c.r0;
+            num_or_null("fin_cal_err", c.last_err);
+            root["cal_active"] = o.cal_active ? 1 : 0;
+            root["cal_points"] = o.cal_points;
+            root["cal_span"]   = o.cal_span;
+
+            root["hist_n"]          = id(hist_n);
+            root["hist_interval_s"] = s.sampleinterval;
+            root["hist_last_ts"]    = id(hist_last_ts);
+            JsonArray th = root.createNestedArray("temp_hist");
+            JsonArray hh = root.createNestedArray("hum_hist");
+            for (int i = 0; i < id(hist_n); i++) { th.add(id(temp_hist)[i]); hh.add(id(hum_hist)[i]); }
+
+            // The uptime sensor counts past millis()'s 49.7-day wrap.
+            // (NaN until its first update: fall back to millis() for that.)
+            root["uptime_s"] = std::isnan(id(uptime_s).state) ? (uint32_t)(millis() / 1000)
+                                                               : (uint32_t) id(uptime_s).state;
+
+interval:
+  # 1 s control tick + history sampling
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(sample_ctr) = id(sample_ctr) + 1;
+          if (id(sample_ctr) >= cooler_glue::settings().sampleinterval) {
+            id(sample_ctr) = 0;
+            float ht = id(sht30t).state, hh = id(sht30h).state;
+            if (cooler_glue::out().box_valid && !std::isnan(ht) && !std::isnan(hh)) {
+              int ti = (int) lroundf(ht), hi = (int) lroundf(hh);
+              if (id(hist_n) < 20) {
+                id(temp_hist)[id(hist_n)] = ti; id(hum_hist)[id(hist_n)] = hi;
+                id(hist_n) = id(hist_n) + 1;
+              } else {
+                for (int i = 0; i < 19; i++) { id(temp_hist)[i] = id(temp_hist)[i + 1]; id(hum_hist)[i] = id(hum_hist)[i + 1]; }
+                id(temp_hist)[19] = ti; id(hum_hist)[19] = hi;
+              }
+              id(hist_last_ts) = (uint32_t) id(sntp_time).now().timestamp;
+              id(g_dirty) = 1;
+            }
+          }
+      - script.execute: control
+      - if:
+          condition:
+            lambda: 'return id(g_dirty) != 0 && id(mqtt_client).is_connected();'
+          then:
+            - script.execute: publish_state
+
+  # status every 30 s regardless of change
+  - interval: 30s
+    then:
+      - if:
+          condition:
+            lambda: 'return id(mqtt_client).is_connected();'
+          then:
+            - script.execute: publish_state
+
+  # status LED: 125 ms phase clock gives 1 Hz and 4 Hz blinks
+  - interval: 125ms
+    then:
+      - lambda: |-
+          uint32_t ph = millis() / 125;
+          bool on;
+          switch (cooler_glue::out().led) {
+            case cooler::Led::Solid: on = true; break;
+            case cooler::Led::Slow:  on = (ph / 4) % 2 == 0; break;
+            case cooler::Led::Fast:  on = ph % 2 == 0; break;
+            default:                 on = false; break;
+          }
+          if (on) id(status_led).turn_on(); else id(status_led).turn_off();

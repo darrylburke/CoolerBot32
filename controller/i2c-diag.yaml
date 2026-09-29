@@ -1,0 +1,36 @@
+# Temporary I2C diagnostic for the SHT30 on the v4 controller board.
+# Slow bus (10 kHz) and a re-scan every 5 s, logged on the serial console, so
+# wiring can be changed live. Flash cooler-v4.yaml again afterwards.
+esphome:
+  name: cooler-i2c-diag
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+
+i2c:
+  id: bus
+  sda: GPIO33
+  scl: GPIO22
+  scan: true
+  frequency: 10kHz
+
+interval:
+  - interval: 5s
+    then:
+      - lambda: |-
+          int found = 0;
+          std::string list;
+          for (uint8_t a = 0x08; a < 0x78; a++) {
+            if (id(bus).write(a, nullptr, 0) == i2c::ERROR_OK) {
+              char b[8]; snprintf(b, sizeof(b), " 0x%02X", a); list += b; found++;
+            }
+          }
+          if (found) ESP_LOGI("diag", "I2C scan (SDA 33, SCL 22, 10 kHz): %d device(s):%s", found, list.c_str());
+          else       ESP_LOGI("diag", "I2C scan (SDA 33, SCL 22, 10 kHz): nothing answered");
+          // Line levels as the ESP32 sees them (both should read 1 at idle).
+          ESP_LOGI("diag", "levels: SDA(33)=%d SCL(22)=%d", gpio_get_level(GPIO_NUM_33), gpio_get_level(GPIO_NUM_22));

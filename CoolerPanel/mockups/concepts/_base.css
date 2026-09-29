@@ -1,0 +1,8 @@
+/* Only properties with an LVGL 9 equivalent are used:
+   background-color -> lv_style_bg_color        border -> lv_style_border_*
+   border-radius    -> lv_style_radius          box-shadow -> lv_style_shadow_*
+   linear-gradient  -> lv_style_bg_grad         opacity -> lv_style_*_opa
+   No blur, no backdrop-filter, no transforms, no webfonts beyond a compiled face. */
+*{margin:0;padding:0;box-sizing:border-box;font-family:'DejaVu Sans',sans-serif}
+body{width:480px;height:480px;overflow:hidden}
+.p{width:480px;height:480px;position:relative}

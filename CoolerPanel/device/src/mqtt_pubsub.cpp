@@ -1,0 +1,87 @@
+#include "mqtt_pubsub.h"
+#include <Arduino.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <PubSubClient.h>
+#include "app.h"
+#include "cooler_defaults.h"            // COOLER_DEFAULT_MQTT_CA
+
+static DeviceConfig s_cfg;              // owns the strings the connection points at
+static WiFiClient s_plain;
+// Port 8883 = TLS, verified against the CA compiled in from the controller's
+// config (tools/import_cooler_broker.sh). WiFiClientSecure checks both the
+// certificate chain and that the certificate names the host we dialled, so
+// the panel only ever talks to the real broker.
+static WiFiClientSecure s_tls;
+static PubSubClient s_mqtt;
+static std::string s_client_id;
+static uint32_t s_next_attempt_ms = 0;
+static uint32_t s_backoff_ms = 1000;    // 1 s -> 60 s (spec §6)
+
+static void on_message(char* topic, uint8_t* payload, unsigned int len) {
+    app_on_mqtt_message(topic, payload, (size_t)len);
+}
+
+void mqtt_begin(const DeviceConfig& c) {
+    s_cfg = c;
+    s_client_id = "cooler-panel-" + std::string(String((uint32_t)(ESP.getEfuseMac() >> 32), HEX).c_str());
+    if (s_cfg.mqtt_port == 8883) {
+        s_tls.setCACert(COOLER_DEFAULT_MQTT_CA);
+        s_tls.setHandshakeTimeout(15);      // seconds
+        s_mqtt.setClient(s_tls);
+    } else {
+        s_mqtt.setClient(s_plain);
+    }
+    s_mqtt.setServer(s_cfg.mqtt_host.c_str(), s_cfg.mqtt_port);
+    s_mqtt.setBufferSize(4096);             // stats/session payloads > default 256
+    s_mqtt.setKeepAlive(30);
+    s_mqtt.setCallback(on_message);
+    app_set_link_state(LINK_MQTT_DOWN);
+    s_next_attempt_ms = 0;                  // connect on first poll
+}
+
+void mqtt_poll() {
+    if (WiFi.status() != WL_CONNECTED) {
+        app_set_link_state(LINK_WIFI_DOWN);
+        return;
+    }
+    if (s_mqtt.connected()) {
+        s_mqtt.loop();
+        return;
+    }
+    app_set_link_state(LINK_MQTT_DOWN);
+    uint32_t now = millis();
+    if (now < s_next_attempt_ms) return;
+    Serial.printf("mqtt: connecting to %s:%u%s as %s...\n", s_cfg.mqtt_host.c_str(),
+                  s_cfg.mqtt_port, s_cfg.mqtt_port == 8883 ? " (TLS)" : "",
+                  s_cfg.mqtt_user.c_str());
+    // Blocking (TCP + CONNECT); UI freezes briefly on reconnect attempts,
+    // which the backoff keeps rare.
+    if (s_mqtt.connect(s_client_id.c_str(), s_cfg.mqtt_user.c_str(),
+                       s_cfg.mqtt_pass.c_str())) {
+        // Two explicit subscriptions rather than a "<base>/#" wildcard: the
+        // panel only ever needs /data and /availability (app_on_mqtt_message
+        // ignores anything else it might see via route_message's prefix
+        // check anyway), and a wildcard would also pick up any /cmd echo or
+        // future subtree this device itself publishes to.
+        s_mqtt.subscribe((s_cfg.mqtt_base + "/data").c_str(), 1);
+        s_mqtt.subscribe((s_cfg.mqtt_base + "/availability").c_str(), 1);
+        app_set_link_state(LINK_OK);
+        s_backoff_ms = 1000;
+        Serial.println("mqtt: connected + subscribed");
+    } else {
+        char tls_err[96] = "";
+        if (s_cfg.mqtt_port == 8883) s_tls.lastError(tls_err, sizeof(tls_err));
+        Serial.printf("mqtt: connect failed state=%d%s%s, retry in %lu ms\n",
+                      s_mqtt.state(), tls_err[0] ? " tls: " : "", tls_err,
+                      (unsigned long)s_backoff_ms);
+        s_next_attempt_ms = now + s_backoff_ms;
+        s_backoff_ms = min<uint32_t>(s_backoff_ms * 2, 60000);
+    }
+}
+
+extern "C" bool platform_mqtt_publish(const char* topic, const char* payload,
+                                      size_t len, bool retain) {
+    if (!s_mqtt.connected()) return false;
+    return s_mqtt.publish(topic, (const uint8_t*)payload, (unsigned int)len, retain);
+}

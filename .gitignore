@@ -1,0 +1,22 @@
+# ESPHome build state and credentials
+/.esphome/
+**/.esphome/
+secrets.yaml
+
+# v3 configs carry plaintext WiFi/MQTT credentials -- never track them
+/configc32-*.yaml
+
+# Host test build output
+/controller/build/
+/controller/*.log
+
+# Scratch / images (root-level only; CoolerPanel has tracked PNG assets)
+/*.png
+/*.ttf
+/dep/
+
+# Plan execution scratch (superpowers)
+/.superpowers/
+
+# Agent workspaces
+.superpowers/
