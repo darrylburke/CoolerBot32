@@ -16,6 +16,11 @@ void platform_delay_ms(uint32_t ms);
    was rejected. Implemented per-platform in sim/ and device/; tests link a stub. */
 bool platform_mqtt_publish(const char* topic, const char* payload,
                            size_t len, bool retain);
+/* Large, short-lived buffers (JSON parse pools for /history). On the device
+   this is PSRAM, keeping internal SRAM for Wi-Fi and TLS; elsewhere malloc. */
+void* platform_big_malloc(size_t n);
+void* platform_big_realloc(void* p, size_t n);
+void  platform_big_free(void* p);
 #ifdef __cplusplus
 }
 #endif

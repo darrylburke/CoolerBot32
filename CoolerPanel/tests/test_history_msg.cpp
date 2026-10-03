@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "history_msg.h"
 #include "history.h"
+#include "test_platform_stub.h"
 #include <cstdio>
 #include <string>
 
@@ -123,3 +124,15 @@ TEST_CASE("missing: samples stamped before the panel's clock was set do not coun
     h.maybe_append(5, 4.0f, 80.0f, 30);          // epoch ~0: SNTP had not synced
     CHECK(missing(h, m).size() == 2);
 }
+
+TEST_CASE("the parse takes its memory from the platform's large-buffer allocator") {
+    // On the device that is PSRAM: a ~14 KB /history twice a minute must not
+    // churn the internal SRAM Wi-Fi and TLS live in.
+    const std::string v = minutes(100, "4.0");
+    const std::string b = body(T0 - 6000, v.c_str(), minutes(100, "80").c_str(), minutes(100, "0").c_str());
+    g_big_allocs = 0;
+    HistoryMsg m;
+    REQUIRE(parse(b, m));
+    CHECK(g_big_allocs > 0);
+}
+

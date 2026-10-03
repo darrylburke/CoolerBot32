@@ -1,6 +1,18 @@
 #include "history_msg.h"
+#include "platform.h"
 #include <ArduinoJson.h>
 #include <cmath>
+
+namespace {
+// ArduinoJson's pools for a full day are ~45 KB in 1 KB blocks; through the
+// default allocator they would land in internal SRAM twice a minute.
+struct BigAllocator : ArduinoJson::Allocator {
+    void* allocate(size_t n) override { return platform_big_malloc(n); }
+    void deallocate(void* p) override { platform_big_free(p); }
+    void* reallocate(void* p, size_t n) override { return platform_big_realloc(p, n); }
+};
+BigAllocator s_big;
+}
 
 static constexpr int64_t kStep = 60;
 static constexpr size_t kMaxSlots = 1440;
@@ -15,7 +27,7 @@ static int16_t c10(double v) {
 }
 
 bool history_msg_parse(const char* json, size_t len, int64_t now, HistoryMsg& out) {
-    JsonDocument doc;
+    JsonDocument doc(&s_big);
     if (deserializeJson(doc, json, len) != DeserializationError::Ok) return false;
     JsonObjectConst o = doc.as<JsonObjectConst>();
     if (o.isNull()) return false;

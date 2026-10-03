@@ -18,6 +18,7 @@
 #include "portal.h"
 #include "backlight.h"
 #include "buttons.h"
+#include <esp_heap_caps.h>
 
 // platform.h seam (shared/ links against these).
 extern "C" uint32_t platform_now_ms(void) { return millis(); }
@@ -27,6 +28,16 @@ extern "C" int64_t  platform_epoch_utc(void) { return (int64_t)time(nullptr); }
 // time() above, this one actually matters for *how* it waits, not just what
 // it returns; see shared/ui/ui.cpp's boot-splash loop (Task 17 fix-round).
 extern "C" void platform_delay_ms(uint32_t ms) { delay(ms); }
+// PSRAM first, so a /history parse leaves internal SRAM to Wi-Fi and TLS.
+extern "C" void* platform_big_malloc(size_t n) {
+    void* p = heap_caps_malloc(n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    return p ? p : malloc(n);
+}
+extern "C" void* platform_big_realloc(void* p, size_t n) {
+    void* q = heap_caps_realloc(p, n, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    return q ? q : realloc(p, n);
+}
+extern "C" void platform_big_free(void* p) { heap_caps_free(p); }
 
 extern const lv_image_dsc_t cooler32_wordmark;
 extern const lv_image_dsc_t northtrail_logo;

@@ -10,6 +10,7 @@
 #include "device_config.h"
 #include <SDL2/SDL.h>
 #include <chrono>
+#include <cstdlib>
 #include <cstring>
 #include <cstdio>
 #include <thread>
@@ -23,6 +24,9 @@ extern "C" int64_t platform_epoch_utc(void) {
     using namespace std::chrono;
     return (int64_t)duration_cast<seconds>(system_clock::now().time_since_epoch()).count();
 }
+extern "C" void* platform_big_malloc(size_t n) { return malloc(n); }
+extern "C" void* platform_big_realloc(void* p, size_t n) { return realloc(p, n); }
+extern "C" void platform_big_free(void* p) { free(p); }
 extern "C" void platform_delay_ms(uint32_t ms) {
     std::this_thread::sleep_for(std::chrono::milliseconds(ms));
 }

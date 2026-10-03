@@ -1,4 +1,5 @@
 #include "platform.h"
+#include <cstdlib>
 
 // cooler_tests links cooler_shared but neither sim/main.cpp nor
 // device/src/main.cpp (the two real platform_*() implementations) -- those
@@ -11,3 +12,8 @@ extern "C" uint32_t platform_now_ms(void) { return 0; }
 // test that changes it puts it back.
 int64_t g_test_epoch = 1700000000;
 extern "C" int64_t platform_epoch_utc(void) { return g_test_epoch; }
+
+int g_big_allocs = 0;
+extern "C" void* platform_big_malloc(size_t n) { g_big_allocs++; return std::malloc(n); }
+extern "C" void* platform_big_realloc(void* p, size_t n) { g_big_allocs++; return std::realloc(p, n); }
+extern "C" void platform_big_free(void* p) { std::free(p); }
