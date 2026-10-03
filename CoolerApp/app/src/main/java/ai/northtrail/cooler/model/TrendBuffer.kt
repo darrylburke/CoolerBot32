@@ -28,6 +28,12 @@ class TrendBuffer private constructor(val all: List<Sample>) {
         return merged(listOf(Sample(epochS, tempC, relay)))
     }
 
+    /** Node-RED's record replaces whatever this buffer holds inside the window's span. */
+    fun withHistory(w: HistoryWindow): TrendBuffer {
+        val kept = all.filter { it.epochS < w.fromS || it.epochS >= w.toS }
+        return TrendBuffer((kept + w.samples).sortedBy { it.epochS }.takeLast(CAPACITY))
+    }
+
     fun samples(sinceS: Long): List<Sample> = all.filter { it.epochS >= sinceS }
 
     private fun merged(extra: List<Sample>): TrendBuffer {

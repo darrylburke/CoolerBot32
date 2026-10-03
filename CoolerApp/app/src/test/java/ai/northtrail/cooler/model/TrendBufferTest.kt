@@ -66,4 +66,29 @@ class TrendBufferTest {
         val b = TrendBuffer().appended(1_000, 4.0, false).appended(2_000, 5.0, false)
         assertEquals(listOf(Sample(2_000, 5.0, false)), b.samples(sinceS = 1_500))
     }
+
+    @Test
+    fun historyReplacesItsSpanAndKeepsTheRest() {
+        val b = TrendBuffer()
+            .appended(1_000, 1.0, false)
+            .appended(1_100, 2.0, false)
+            .appended(1_500, 9.0, true)
+        val w = HistoryWindow(1_050, 1_400, listOf(Sample(1_080, 3.0, true), Sample(1_140, 4.0, null)))
+        assertEquals(
+            listOf(Sample(1_000, 1.0, false), Sample(1_080, 3.0, true), Sample(1_140, 4.0, null), Sample(1_500, 9.0, true)),
+            b.withHistory(w).all,
+        )
+    }
+
+    @Test
+    fun historyFillsAnEmptyBuffer() {
+        val w = HistoryWindow(1_000, 1_120, listOf(Sample(1_000, 3.0, false), Sample(1_060, 3.1, true)))
+        assertEquals(w.samples, TrendBuffer().withHistory(w).all)
+    }
+
+    @Test
+    fun liveSamplesAfterTheHistoryStillAppend() {
+        val w = HistoryWindow(1_000, 1_060, listOf(Sample(1_000, 3.0, false)))
+        assertEquals(2, TrendBuffer().withHistory(w).appended(1_030, 3.2, true).all.size)
+    }
 }
