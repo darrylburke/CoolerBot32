@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
+#include <lwip/netdb.h>
 #include "app.h"
 #include "cooler_defaults.h"            // COOLER_DEFAULT_MQTT_CA
 
@@ -17,6 +18,24 @@ static PubSubClient s_mqtt;
 static std::string s_client_id;
 static uint32_t s_next_attempt_ms = 0;
 static uint32_t s_backoff_ms = 1000;    // 1 s -> 60 s (spec §6)
+
+// lwIP's getaddrinfo() runs the lookup on the TCPIP thread and leaves the DNS
+// cache alone. Arduino 3.2.0's hostByName() -- what client.connect(host, port)
+// uses -- clears lwIP's DNS cache from the calling task; if SNTP's lookup of
+// pool.ntp.org is still pending, that runs SNTP's callback outside the TCPIP
+// core lock and lwIP asserts ("sys_untimeout ... Required to lock TCPIP core
+// functionality!"). After a crash reboot the clock survives the soft reset,
+// so this can happen on any boot, not just the first.
+static bool resolve(const char* host, IPAddress& out) {
+    struct addrinfo hints = {};
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    struct addrinfo* res = nullptr;
+    if (getaddrinfo(host, nullptr, &hints, &res) != 0 || !res) return false;
+    out = IPAddress(((struct sockaddr_in*)res->ai_addr)->sin_addr.s_addr);
+    freeaddrinfo(res);
+    return true;
+}
 
 static void on_message(char* topic, uint8_t* payload, unsigned int len) {
     app_on_mqtt_message(topic, payload, (size_t)len);
@@ -52,12 +71,10 @@ void mqtt_poll() {
     app_set_link_state(LINK_MQTT_DOWN);
     uint32_t now = millis();
     if (now < s_next_attempt_ms) return;
-    // Hold the first connect until SNTP has set the clock. The connect's DNS
-    // lookup (hostByName) clears lwIP's DNS cache, and if SNTP's own lookup
-    // of pool.ntp.org is still pending, that fires SNTP's callback from this
-    // task and lwIP asserts ("Required to lock TCPIP core functionality!").
-    // TLS needs the right time to check the broker's certificate anyway.
-    // Give up waiting after kClockWaitMs so a blocked NTP cannot strand MQTT.
+    // Hold the first connect until SNTP has set the clock: TLS needs the right
+    // time to check the broker's certificate, so an earlier attempt can only
+    // fail. Give up waiting after kClockWaitMs so a blocked NTP cannot strand
+    // MQTT.
     static constexpr uint32_t kClockWaitMs = 20000;
     static uint32_t s_wifi_up_ms = 0;
     if (s_wifi_up_ms == 0) s_wifi_up_ms = now ? now : 1;
@@ -66,9 +83,20 @@ void mqtt_poll() {
                   s_cfg.mqtt_port, s_cfg.mqtt_port == 8883 ? " (TLS)" : "",
                   s_cfg.mqtt_user.c_str());
     // Blocking (TCP + CONNECT); UI freezes briefly on reconnect attempts,
-    // which the backoff keeps rare.
-    if (s_mqtt.connect(s_client_id.c_str(), s_cfg.mqtt_user.c_str(),
-                       s_cfg.mqtt_pass.c_str())) {
+    // which the backoff keeps rare. The socket is opened here, on an address
+    // from resolve(), and PubSubClient::connect() reuses an already-connected
+    // client, so hostByName() is never called. TLS is still given the host
+    // name: the certificate is checked against it, not against the address.
+    IPAddress ip;
+    const bool resolved = resolve(s_cfg.mqtt_host.c_str(), ip);
+    const bool open = resolved &&
+        (s_cfg.mqtt_port == 8883
+             ? s_tls.connect(ip, s_cfg.mqtt_port, s_cfg.mqtt_host.c_str(),
+                             COOLER_DEFAULT_MQTT_CA, nullptr, nullptr) == 1
+             : s_plain.connect(ip, s_cfg.mqtt_port) == 1);
+    if (!resolved) Serial.printf("mqtt: cannot resolve %s\n", s_cfg.mqtt_host.c_str());
+    if (open && s_mqtt.connect(s_client_id.c_str(), s_cfg.mqtt_user.c_str(),
+                               s_cfg.mqtt_pass.c_str())) {
         // Explicit subscriptions rather than a "<base>/#" wildcard: the
         // panel only needs /data, /availability and /history, and a
         // wildcard would also pick up any /cmd echo or future subtree this
