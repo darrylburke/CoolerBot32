@@ -13,7 +13,7 @@ flowchart LR
     ESP <-->|MQTT over TLS :8883| BRK[(Mosquitto broker<br/>private CA, ACL)]
     BRK <--> PANEL[CoolerPanel<br/>ESP32-S3 wall LCD]
     BRK <--> APP[CoolerApp<br/>Android]
-    BRK -.-> NR[Node-RED<br/>alerts + history, planned]
+    BRK <--> NR[Node-RED<br/>24 h history]
 ```
 
 ## Screenshots
@@ -105,13 +105,15 @@ Broker port 8883 with TLS, using a private CA embedded in `controller/cooler-v4.
 | `cooler/data` | controller publishes, retained | JSON, `"v": 2`, every 30 s and on any change |
 | `cooler/availability` | controller publishes, retained | `online` / `offline` (last will) |
 | `cooler/cmd` | clients publish | JSON, any of the ten settings above as integers, plus `{"calibrate":1}` / `{"calibrate":0}`, `{"fincal_reset":1}`, `{"clearhist":1}` |
+| `cooler/history` | Node-RED publishes, not retained | JSON, `"v": 1`, the last 24 h in one-minute slots, after every live `cooler/data`; see [nodered/README.md](nodered/README.md) |
 | `cooler/binary_sensor/override_switch/state` | controller publishes | `ON` / `OFF` |
 
 | Login | Used by | ACL |
 |---|---|---|
 | the controller's login (`mqtt_username`) | controller | read/write `cooler/#` |
-| the panel's login (`panel_mqtt_username`) | CoolerPanel | read `cooler/data`, `cooler/availability`; write `cooler/cmd` |
+| the panel's login (`panel_mqtt_username`) | CoolerPanel | read `cooler/data`, `cooler/availability`, `cooler/history`; write `cooler/cmd` |
 | the app's login (`app_mqtt_username`) | CoolerApp | same as the panel's |
+| Node-RED's login | Node-RED | read `cooler/data`, `cooler/availability`; write `cooler/history` |
 
 Passwords live only in the git-ignored `controller/secrets.yaml`.
 
@@ -133,7 +135,7 @@ Folders in this repository:
 
 - **CoolerPanel/** - Waveshare ESP32-S3 Smart 86 wall LCD (LVGL 9.3, Arduino/PlatformIO) with a desktop simulator. See [CoolerPanel/README.md](CoolerPanel/README.md).
 - **CoolerApp/** - Android app (Kotlin, Compose, HiveMQ client) for monitoring and settings; no notifications. See [CoolerApp/README.md](CoolerApp/README.md).
-- Node-RED (planned) for alerts and long-term history, fed from the retained `cooler/data` and `cooler/availability`.
+- **nodered/** - Node-RED flow that keeps 24 h of history and republishes it on `cooler/history`. See [nodered/README.md](nodered/README.md). Alerts are still planned.
 
 ## Repository layout
 
@@ -148,6 +150,7 @@ RULES.md           legacy v3 dual-AC rules
 fridigaire.md      original design conversation
 CoolerPanel/       ESP32-S3 wall LCD firmware and desktop simulator
 CoolerApp/         Android app
+nodered/           Node-RED 24 h history flow (history.js, build-flow.mjs, tests)
 LICENSE            MIT
 ```
 
@@ -162,7 +165,7 @@ To do:
 3. Run the install checklist in RULES-v4.md: AC timing test, then fin calibration.
 4. Set `coolerset` back to 4 °C for real use (the bench controller is at 12).
 5. Check CoolerApp on the phone.
-6. Alerts and long-term history in Node-RED.
+6. Alerts in Node-RED.
 
 ## Documentation
 

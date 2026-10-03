@@ -1,0 +1,120 @@
+[
+    {
+        "id": "c001e70000000001",
+        "type": "tab",
+        "label": "Cooler history",
+        "disabled": false,
+        "info": "24 h of cooler/data in one-minute slots, republished on cooler/history (not retained). See nodered/README.md."
+    },
+    {
+        "id": "c001e70000000005",
+        "type": "mqtt in",
+        "z": "c001e70000000001",
+        "name": "cooler/data",
+        "topic": "cooler/data",
+        "qos": "1",
+        "datatype": "auto-detect",
+        "broker": "c001e70000000002",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 100,
+        "wires": [
+            [
+                "c001e70000000003"
+            ]
+        ]
+    },
+    {
+        "id": "c001e70000000006",
+        "type": "mqtt in",
+        "z": "c001e70000000001",
+        "name": "cooler/availability",
+        "topic": "cooler/availability",
+        "qos": "1",
+        "datatype": "utf8",
+        "broker": "c001e70000000002",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 160,
+        "wires": [
+            [
+                "c001e70000000003"
+            ]
+        ]
+    },
+    {
+        "id": "c001e70000000003",
+        "type": "function",
+        "z": "c001e70000000001",
+        "name": "history",
+        "func": "// Keeps the last 24 h of cooler/data in one-minute slots (flow memory) and\n// emits the whole window for cooler/history after every live message.\nconst STEP = 60, SLOTS = 1440;\n\nif (msg.topic === 'cooler/availability') {\n    flow.set('avail', String(msg.payload).trim());\n    return null;\n}\nif (msg.topic !== 'cooler/data') return null;\n// A retained copy is the broker replaying its last message when Node-RED\n// (re)connects; it may be hours old.\nif (msg.retain || flow.get('avail') === 'offline') return null;\nconst d = msg.payload;\nif (!d || typeof d !== 'object' || d.v !== 2) return null;\n\nconst num = (x, places) => {\n    if (typeof x !== 'number' || !isFinite(x)) return null;\n    const f = 10 ** places;\n    return Math.round(x * f) / f;\n};\nconst slot = Math.floor(Date.now() / 1000 / STEP) * STEP;\nconst fresh = () => ({ t0: slot, temp: [], hum: [], relay: [] });\n\nlet h = flow.get('hist') || fresh();\nlet newest = h.t0 + (h.temp.length - 1) * STEP;   // t0 - STEP when empty\n// Clock went backwards, or the gap is longer than the window: start again.\nif (newest > slot || slot - newest > SLOTS * STEP) { h = fresh(); newest = slot - STEP; }\nfor (; newest < slot; newest += STEP) { h.temp.push(null); h.hum.push(null); h.relay.push(null); }\n\nconst i = h.temp.length - 1;\nh.temp[i] = num(d.temp, 1);\nh.hum[i] = num(d.humidity, 0);\nh.relay[i] = d.relay === 1 ? 1 : d.relay === 0 ? 0 : null;\n\nconst drop = h.temp.length - SLOTS;\nif (drop > 0) {\n    h.temp.splice(0, drop); h.hum.splice(0, drop); h.relay.splice(0, drop);\n    h.t0 += drop * STEP;\n}\nflow.set('hist', h);\n\nmsg.topic = 'cooler/history';\nmsg.retain = false;\nmsg.payload = JSON.stringify({ v: 1, t0: h.t0, interval_s: STEP, temp: h.temp, hum: h.hum, relay: h.relay });\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 130,
+        "wires": [
+            [
+                "c001e70000000004"
+            ]
+        ]
+    },
+    {
+        "id": "c001e70000000004",
+        "type": "mqtt out",
+        "z": "c001e70000000001",
+        "name": "cooler/history",
+        "topic": "cooler/history",
+        "qos": "0",
+        "retain": "false",
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "c001e70000000002",
+        "x": 640,
+        "y": 130,
+        "wires": []
+    },
+    {
+        "id": "c001e70000000002",
+        "type": "mqtt-broker",
+        "name": "Cooler broker (local)",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "node-red-cooler-history",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    }
+]
