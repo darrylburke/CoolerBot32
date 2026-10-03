@@ -2,6 +2,7 @@ package ai.northtrail.cooler.ui
 
 import ai.northtrail.cooler.model.Sample
 import ai.northtrail.cooler.model.StatusText
+import ai.northtrail.cooler.model.TrendSegments
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -24,7 +25,8 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Box temperature from [fromEpochS] to [toEpochS]: the setpoint band shaded,
- * spans with the relay closed tinted, the temperature as a line.
+ * spans with the relay closed tinted, the temperature as a line that breaks
+ * where samples are missing (see [TrendSegments]).
  */
 @Composable
 fun TrendChart(
@@ -48,6 +50,7 @@ fun TrendChart(
     val yMin = listOfNotNull(temps.min(), bandLo).min() - 1.0
     val yMax = listOfNotNull(temps.max(), bandHi).max() + 1.0
     val span = (toEpochS - fromEpochS).coerceAtLeast(1).toFloat()
+    val segments = TrendSegments.split(samples)
 
     Column(modifier) {
         Row(Modifier.fillMaxWidth()) {
@@ -65,17 +68,23 @@ fun TrendChart(
             fun x(t: Long) = (t - fromEpochS) / span * size.width
             fun y(c: Double) = ((yMax - c) / (yMax - yMin)).toFloat() * size.height
 
-            samples.zipWithNext().forEach { (a, b) ->
-                if (a.relay == true) {
-                    drawRect(CoolerColors.RelayTint, Offset(x(a.epochS), 0f), Size(x(b.epochS) - x(a.epochS), size.height))
+            segments.forEach { seg ->
+                seg.zipWithNext().forEach { (a, b) ->
+                    if (a.relay == true) {
+                        drawRect(CoolerColors.RelayTint, Offset(x(a.epochS), 0f), Size(x(b.epochS) - x(a.epochS), size.height))
+                    }
                 }
             }
             if (bandLo != null && bandHi != null) {
                 drawRect(CoolerColors.Band, Offset(0f, y(bandHi)), Size(size.width, y(bandLo) - y(bandHi)))
             }
             val line = Path()
-            samples.forEachIndexed { i, s ->
-                if (i == 0) line.moveTo(x(s.epochS), y(s.tempC)) else line.lineTo(x(s.epochS), y(s.tempC))
+            segments.forEach { seg ->
+                seg.forEachIndexed { i, s ->
+                    if (i == 0) line.moveTo(x(s.epochS), y(s.tempC)) else line.lineTo(x(s.epochS), y(s.tempC))
+                }
+                // A lone reading between gaps has no line to sit on.
+                if (seg.size == 1) drawCircle(CoolerColors.Accent, 2.dp.toPx(), Offset(x(seg[0].epochS), y(seg[0].tempC)))
             }
             drawPath(line, CoolerColors.Accent, style = Stroke(width = 2.dp.toPx()))
         }
