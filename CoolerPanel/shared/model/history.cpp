@@ -1,6 +1,7 @@
 #include "history.h"
 #include <cstdlib>
 #include <cmath>
+#include <vector>
 
 static int16_t to_c10(float v) {
     float scaled = v * 10.0f;
@@ -44,3 +45,18 @@ bool History::maybe_append(int64_t epoch, float temp, float rh, int min_gap_s,
 const Sample& History::at(size_t i) const { return buf_[(head_ + i) % cap_]; }
 int64_t History::newest_epoch() const { return count_ ? at(count_ - 1).t : 0; }
 int64_t History::oldest_epoch() const { return count_ ? at(0).t : 0; }
+
+void History::merge_window(int64_t from, int64_t to, const Sample* s, size_t n) {
+    if (!buf_) return;
+    std::vector<Sample> out;
+    out.reserve(count_ + n);
+    size_t i = 0;
+    for (; i < count_ && at(i).t < from; i++) out.push_back(at(i));
+    for (size_t k = 0; k < n; k++) out.push_back(s[k]);
+    for (; i < count_; i++)
+        if (at(i).t >= to) out.push_back(at(i));
+    size_t start = out.size() > cap_ ? out.size() - cap_ : 0;
+    count_ = out.size() - start;
+    head_ = 0;
+    for (size_t k = 0; k < count_; k++) buf_[k] = out[start + k];
+}

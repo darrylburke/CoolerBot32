@@ -59,3 +59,45 @@ TEST_CASE("init(0) fails cleanly") {
     CHECK_FALSE(h.init(0));
     CHECK(h.size() == 0);
 }
+
+TEST_CASE("merge_window replaces its span and keeps samples outside it") {
+    History h;
+    REQUIRE(h.init(10));
+    h.maybe_append(100, 1.0f, 10.0f, 30);
+    h.maybe_append(130, 2.0f, 20.0f, 30);
+    h.maybe_append(400, 3.0f, 30.0f, 30);
+    h.maybe_append(900, 9.0f, 90.0f, 30);
+    const Sample s[] = {{360, 50, 500, 1}, {420, 60, 600, 0}};
+    h.merge_window(300, 600, s, 2);
+    REQUIRE(h.size() == 5);
+    CHECK(h.at(0).t == 100);
+    CHECK(h.at(1).t == 130);
+    CHECK(h.at(2).t == 360);
+    CHECK(h.at(2).ac == 1);
+    CHECK(h.at(3).t == 420);
+    CHECK(h.at(4).t == 900);
+    // The ring still appends after a merge.
+    CHECK(h.maybe_append(960, 9.5f, 95.0f, 30));
+    CHECK(h.newest_epoch() == 960);
+}
+
+TEST_CASE("merge_window keeps the newest when over capacity") {
+    History h;
+    REQUIRE(h.init(3));
+    h.maybe_append(100, 1.0f, 10.0f, 30);
+    h.maybe_append(200, 2.0f, 20.0f, 30);
+    const Sample s[] = {{300, 30, 300, 0}, {360, 36, 360, 0}, {420, 42, 420, 0}};
+    h.merge_window(300, 480, s, 3);
+    REQUIRE(h.size() == 3);
+    CHECK(h.oldest_epoch() == 300);
+    CHECK(h.newest_epoch() == 420);
+}
+
+TEST_CASE("merge_window into an empty ring") {
+    History h;
+    REQUIRE(h.init(10));
+    const Sample s[] = {{300, 30, 300, 1}};
+    h.merge_window(300, 360, s, 1);
+    REQUIRE(h.size() == 1);
+    CHECK(h.at(0).temp_c10 == 30);
+}
