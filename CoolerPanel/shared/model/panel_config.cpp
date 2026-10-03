@@ -47,8 +47,8 @@ bool panel_config_from_json(const char* json, PanelConfig& out) {
     c.alarm.over_s    = clampi(c.alarm.over_s,    60, 86400);
     c.alarm.holdoff_s = clampi(c.alarm.holdoff_s,  0, 86400);
     c.backlight       = clampi(c.backlight,        5,  100);
-    if (c.default_zoom_s != 3600 && c.default_zoom_s != 86400 &&
-        c.default_zoom_s != 604800) c.default_zoom_s = 3600;
+    if (c.default_zoom_s != 3600 && c.default_zoom_s != 10800 &&
+        c.default_zoom_s != 21600) c.default_zoom_s = 3600;
     c.hum_low  = clampi(c.hum_low,  0, 100);
     c.hum_high = clampi(c.hum_high, 0, 100);
     // An inverted band would paint every reading red AND amber depending on

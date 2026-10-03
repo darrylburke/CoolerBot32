@@ -9,7 +9,7 @@ class History;
 //
 // `ac` is 1 when the relay was closed for most of the column (see
 // History's Sample::ac), which is what the bar gets coloured by. A column is
-// 35 s wide at the 1 h zoom and ~100 min at 7 d, so at the long zooms it
+// 35 s wide at the 1 h zoom and ~3.5 min at 6 h, so at the long zooms it
 // reports whether the column was mostly cooling rather than a single run.
 struct Column {
     float tmin, tmax;

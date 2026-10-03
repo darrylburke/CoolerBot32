@@ -226,8 +226,8 @@ lv_obj_t* screen_trend_create(lv_obj_t* parent) {
         lv_label_set_text(s_ax_h[i], "");
     }
 
-    static const char* zooms[] = {"1h", "24h", "7d"};
-    static const int zsec[] = {3600, 86400, 604800};
+    static const char* zooms[] = {"1h", "3h", "6h"};
+    static const int zsec[] = {3600, 10800, 21600};
     for (int i = 0; i < 3; i++) {
         lv_obj_t* b = lv_button_create(s_root);
         lv_obj_set_size(b, 100, 32);

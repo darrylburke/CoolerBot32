@@ -18,7 +18,7 @@ TEST_CASE("json round trip preserves every field") {
     PanelConfig c;
     c.alarm.silent_s = 120; c.alarm.over_c = 3;
     c.alarm.over_s = 900;   c.alarm.holdoff_s = 600;
-    c.backlight = 40; c.night_dim = false; c.default_zoom_s = 86400; c.hum_low = 70; c.hum_high = 95;
+    c.backlight = 40; c.night_dim = false; c.default_zoom_s = 21600; c.hum_low = 70; c.hum_high = 95;
 
     PanelConfig r;
     REQUIRE(panel_config_from_json(panel_config_to_json(c).c_str(), r));
@@ -28,7 +28,7 @@ TEST_CASE("json round trip preserves every field") {
     CHECK(r.alarm.holdoff_s == 600);
     CHECK(r.backlight == 40);
     CHECK(r.night_dim == false);
-    CHECK(r.default_zoom_s == 86400);
+    CHECK(r.default_zoom_s == 21600);
     CHECK(r.hum_low == 70);
     CHECK(r.hum_high == 95);
 }
@@ -68,3 +68,16 @@ TEST_CASE("humidity thresholds clamp to 0..100") {
     CHECK(r.hum_low == 0);
     CHECK(r.hum_high == 100);
 }
+
+TEST_CASE("the trend zooms are 1 h, 3 h and 6 h; a retired 24 h or 7 d falls back to 1 h") {
+    PanelConfig r;
+    REQUIRE(panel_config_from_json("{\"default_zoom_s\":10800}", r));
+    CHECK(r.default_zoom_s == 10800);
+    REQUIRE(panel_config_from_json("{\"default_zoom_s\":21600}", r));
+    CHECK(r.default_zoom_s == 21600);
+    REQUIRE(panel_config_from_json("{\"default_zoom_s\":86400}", r));
+    CHECK(r.default_zoom_s == 3600);
+    REQUIRE(panel_config_from_json("{\"default_zoom_s\":604800}", r));
+    CHECK(r.default_zoom_s == 3600);
+}
+
