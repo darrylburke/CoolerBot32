@@ -22,6 +22,16 @@ struct Column {
 void chart_downsample(const History& h, int64_t from, int64_t to,
                       Column* out, size_t ncols);
 
+// Vertical extent to draw column i so the trace is continuous. On its own a
+// column is just its min..max, and on a steep rise or fall neighbours land at
+// different heights without touching, so the curve breaks into dashes.
+// Temperature: the column's range widened to meet the previous column's.
+// Humidity: from the previous column's midpoint to this one's. A column after
+// an empty one (a real gap) is not joined. Only for columns with data.
+struct Span { float lo, hi; };
+Span chart_joined_temp(const Column* cols, size_t i);
+Span chart_joined_rh(const Column* cols, size_t i);
+
 // Exclusive right edge of the trend window: now, or the newest sample if the
 // clock is behind it. Anchoring to now (not the newest sample) makes a sensor
 // outage -- which stops history growing -- show as a gap on the right rather

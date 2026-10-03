@@ -129,3 +129,49 @@ TEST_CASE("an empty column is still a gap when columns are wider than a minute")
     CHECK(cols[2].has);
 }
 
+static Column col(float tmin, float tmax, float hmin = 80, float hmax = 80) {
+    return Column{tmin, tmax, hmin, hmax, true, 0};
+}
+
+TEST_CASE("a column reaches down to the previous one on a steep rise") {
+    const Column c[] = {col(2.0f, 2.2f), col(3.0f, 3.1f)};
+    const Span s = chart_joined_temp(c, 1);
+    CHECK(s.lo == doctest::Approx(2.2f));   // meets the top of the previous column
+    CHECK(s.hi == doctest::Approx(3.1f));
+}
+
+TEST_CASE("a column reaches up to the previous one on a steep fall") {
+    const Column c[] = {col(5.0f, 5.5f), col(1.0f, 1.2f)};
+    const Span s = chart_joined_temp(c, 1);
+    CHECK(s.lo == doctest::Approx(1.0f));
+    CHECK(s.hi == doctest::Approx(5.0f));   // meets the bottom of the previous column
+}
+
+TEST_CASE("overlapping columns keep their own range") {
+    const Column c[] = {col(2.0f, 3.0f), col(2.5f, 3.5f)};
+    const Span s = chart_joined_temp(c, 1);
+    CHECK(s.lo == doctest::Approx(2.5f));
+    CHECK(s.hi == doctest::Approx(3.5f));
+}
+
+TEST_CASE("after an empty column, or at the start, a column stands alone") {
+    Column c[] = {col(2.0f, 2.2f), col(0, 0), col(6.0f, 6.1f)};
+    c[1].has = false;
+    const Span s = chart_joined_temp(c, 2);
+    CHECK(s.lo == doctest::Approx(6.0f));
+    CHECK(s.hi == doctest::Approx(6.1f));
+    const Span f = chart_joined_temp(c, 0);
+    CHECK(f.lo == doctest::Approx(2.0f));
+    CHECK(f.hi == doctest::Approx(2.2f));
+}
+
+TEST_CASE("humidity joins midpoint to midpoint") {
+    const Column c[] = {col(4, 4, 80, 82), col(4, 4, 86, 88)};
+    const Span s = chart_joined_rh(c, 1);
+    CHECK(s.lo == doctest::Approx(81.0f));
+    CHECK(s.hi == doctest::Approx(87.0f));
+    const Span f = chart_joined_rh(c, 0);
+    CHECK(f.lo == doctest::Approx(81.0f));
+    CHECK(f.hi == doctest::Approx(81.0f));
+}
+

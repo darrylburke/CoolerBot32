@@ -57,6 +57,20 @@ void chart_downsample(const History& h, int64_t from, int64_t to,
             if (!out[i].has && out[i - 1].has && out[i + 1].has) out[i] = out[i - 1];
 }
 
+Span chart_joined_temp(const Column* cols, size_t i) {
+    const Column& c = cols[i];
+    if (i == 0 || !cols[i - 1].has) return Span{c.tmin, c.tmax};
+    const Column& p = cols[i - 1];
+    return Span{c.tmin < p.tmax ? c.tmin : p.tmax, c.tmax > p.tmin ? c.tmax : p.tmin};
+}
+
+Span chart_joined_rh(const Column* cols, size_t i) {
+    const float mid = (cols[i].hmin + cols[i].hmax) * 0.5f;
+    if (i == 0 || !cols[i - 1].has) return Span{mid, mid};
+    const float pm = (cols[i - 1].hmin + cols[i - 1].hmax) * 0.5f;
+    return Span{mid < pm ? mid : pm, mid > pm ? mid : pm};
+}
+
 int64_t chart_window_end(int64_t newest_epoch, int64_t now_epoch) {
     return (now_epoch > newest_epoch ? now_epoch : newest_epoch) + 1;
 }

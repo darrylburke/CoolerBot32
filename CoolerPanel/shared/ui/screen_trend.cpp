@@ -359,8 +359,9 @@ static void draw_graph(void) {
     for (int i = 0; i < NCOLS; i++) {
         if (!cols[i].has) continue;      // gap stays blank
         bar.bg_color = cols[i].ac ? th_cool() : th_ink2();
-        int32_t y0 = y_of(cols[i].tmax);
-        int32_t y1 = y_of(cols[i].tmin);
+        const Span sp = chart_joined_temp(cols, i);   // meets its neighbour
+        int32_t y0 = y_of(sp.hi);
+        int32_t y1 = y_of(sp.lo);
         if (y1 - y0 < 2) y1 = y0 + 2;    // keep flat runs visible
         lv_area_t a = {i * colw, y0, i * colw + colw - 1, y1};
         lv_draw_rect(&layer, &bar, &a);
@@ -375,11 +376,13 @@ static void draw_graph(void) {
         rh.bg_opa = LV_OPA_COVER;
         for (int i = 0; i < NCOLS; i++) {
             if (!cols[i].has) continue;    // same honest gap as the temp trace
-            const float mid = (cols[i].hmin + cols[i].hmax) * 0.5f;
-            int32_t y = hy_of(mid);
-            if (y < 0) y = 0;
-            if (y > GRAPH_H - 3) y = GRAPH_H - 3;
-            lv_area_t a = {i * colw, y, i * colw + colw - 1, y + 2};
+            const Span sp = chart_joined_rh(cols, i);    // midpoint to midpoint
+            int32_t y0 = hy_of(sp.hi);
+            int32_t y1 = hy_of(sp.lo) + 2;
+            if (y0 < 0) y0 = 0;
+            if (y1 > GRAPH_H - 1) y1 = GRAPH_H - 1;
+            if (y1 - y0 < 2) y0 = y1 - 2;
+            lv_area_t a = {i * colw, y0, i * colw + colw - 1, y1};
             lv_draw_rect(&layer, &rh, &a);
         }
     }
