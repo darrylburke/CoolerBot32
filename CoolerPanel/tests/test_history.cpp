@@ -60,18 +60,18 @@ TEST_CASE("init(0) fails cleanly") {
     CHECK(h.size() == 0);
 }
 
-TEST_CASE("merge_window replaces its span and keeps samples outside it") {
+TEST_CASE("merge_in inserts in time order and never replaces own samples") {
     History h;
     REQUIRE(h.init(10));
     h.maybe_append(100, 1.0f, 10.0f, 30);
     h.maybe_append(130, 2.0f, 20.0f, 30);
-    h.maybe_append(400, 3.0f, 30.0f, 30);
     h.maybe_append(900, 9.0f, 90.0f, 30);
-    const Sample s[] = {{360, 50, 500, 1}, {420, 60, 600, 0}};
-    h.merge_window(300, 600, s, 2);
+    const Sample s[] = {{130, 77, 770, 1}, {360, 50, 500, 1}, {420, 60, 600, 0}};
+    h.merge_in(s, 3);
     REQUIRE(h.size() == 5);
     CHECK(h.at(0).t == 100);
     CHECK(h.at(1).t == 130);
+    CHECK(h.at(1).temp_c10 == 20);   // own sample kept, the history one at the same time dropped
     CHECK(h.at(2).t == 360);
     CHECK(h.at(2).ac == 1);
     CHECK(h.at(3).t == 420);
@@ -81,23 +81,23 @@ TEST_CASE("merge_window replaces its span and keeps samples outside it") {
     CHECK(h.newest_epoch() == 960);
 }
 
-TEST_CASE("merge_window keeps the newest when over capacity") {
+TEST_CASE("merge_in keeps the newest when over capacity") {
     History h;
     REQUIRE(h.init(3));
     h.maybe_append(100, 1.0f, 10.0f, 30);
     h.maybe_append(200, 2.0f, 20.0f, 30);
     const Sample s[] = {{300, 30, 300, 0}, {360, 36, 360, 0}, {420, 42, 420, 0}};
-    h.merge_window(300, 480, s, 3);
+    h.merge_in(s, 3);
     REQUIRE(h.size() == 3);
     CHECK(h.oldest_epoch() == 300);
     CHECK(h.newest_epoch() == 420);
 }
 
-TEST_CASE("merge_window into an empty ring") {
+TEST_CASE("merge_in into an empty ring") {
     History h;
     REQUIRE(h.init(10));
     const Sample s[] = {{300, 30, 300, 1}};
-    h.merge_window(300, 360, s, 1);
+    h.merge_in(s, 1);
     REQUIRE(h.size() == 1);
     CHECK(h.at(0).temp_c10 == 30);
 }

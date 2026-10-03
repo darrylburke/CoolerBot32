@@ -49,9 +49,10 @@ extern "C" void app_on_mqtt_message(const char* topic, const uint8_t* payload, s
     // fills minutes of the trend this panel did not see itself.
     if (router_is_leaf(topic, "history")) {
         HistoryMsg m;
-        if (history_msg_parse((const char*)payload, len, platform_epoch_utc(), m) &&
-            history_adds_coverage(g_hist, m))
-            g_hist.merge_window(m.from, m.to, m.samples.data(), m.samples.size());
+        if (!history_msg_parse((const char*)payload, len, platform_epoch_utc(), m)) return;
+        std::vector<Sample> add;
+        history_missing(g_hist, m, add);
+        if (!add.empty()) g_hist.merge_in(add.data(), add.size());
         return;
     }
     if (!route_message(g_state, topic, (const char*)payload, len, platform_epoch_utc()))

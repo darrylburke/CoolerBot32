@@ -16,7 +16,12 @@ struct HistoryMsg {
 // the "not from the future" check is skipped while it is unset.
 bool history_msg_parse(const char* json, size_t len, int64_t now, HistoryMsg& out);
 
-// True when m has a sample in a minute of [m.from, m.to) where h has none.
+// The samples of m the panel lacks, oldest first, into out (cleared first).
 // /history arrives with every /data, so a panel that has been connected all
-// along skips the merge rather than rebuilding its ring twice a minute.
-bool history_adds_coverage(const History& h, const HistoryMsg& m);
+// along must find nothing here rather than rebuild its ring twice a minute:
+//  - a slot counts as held if the panel has a sample within a minute either
+//    side of it (its own 30 s gate and clock skew against Node-RED's);
+//  - slots newer than a minute before the panel's newest sample belong to
+//    live data and are never taken;
+//  - samples stamped before the panel's clock was set count for nothing.
+void history_missing(const History& h, const HistoryMsg& m, std::vector<Sample>& out);

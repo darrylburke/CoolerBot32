@@ -22,10 +22,10 @@ public:
     bool init(size_t capacity);   // false on cap==0 or allocation failure
     void clear();
 
-    // Replace every sample in [from, to) with the n given ones (sorted by t,
-    // all inside [from, to)), keeping own samples outside that span. If the
-    // result is over capacity the oldest go.
-    void merge_window(int64_t from, int64_t to, const Sample* s, size_t n);
+    // Insert the n given samples (sorted by t) among the held ones in time
+    // order. Held samples always win: one at a time already held is dropped.
+    // If the result is over capacity the oldest go.
+    void merge_in(const Sample* s, size_t n);
 
     // Store only if at least min_gap_s has elapsed since the last stored
     // sample. /data publishes on change as well as every 30 s, so without

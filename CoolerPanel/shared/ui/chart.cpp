@@ -46,6 +46,15 @@ void chart_downsample(const History& h, int64_t from, int64_t to,
         if (s.ac <= 2) votes[s.ac]++;
     }
     if (cur < ncols) out[cur].ac = winner(votes);
+
+    // Node-RED's history is one sample a minute. Where a column is narrower
+    // than that (the 1 h zoom), a minute-sampled stretch leaves every other
+    // column empty; a single empty column between two filled ones is that,
+    // not an outage, so it takes its left neighbour. Wider columns keep
+    // every gap: there one empty column is a real outage.
+    if (span < (int64_t)ncols * 60)
+        for (size_t i = 1; i + 1 < ncols; i++)
+            if (!out[i].has && out[i - 1].has && out[i + 1].has) out[i] = out[i - 1];
 }
 
 int64_t chart_window_end(int64_t newest_epoch, int64_t now_epoch) {

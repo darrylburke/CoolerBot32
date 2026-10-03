@@ -47,14 +47,18 @@ bool history_msg_parse(const char* json, size_t len, int64_t now, HistoryMsg& ou
     return true;
 }
 
-bool history_adds_coverage(const History& h, const HistoryMsg& m) {
-    if (m.to <= m.from) return false;
-    std::vector<bool> have((size_t)((m.to - m.from) / kStep), false);
-    for (size_t i = 0; i < h.size(); i++) {
-        const int64_t t = h.at(i).t;
-        if (t >= m.from && t < m.to) have[(size_t)((t - m.from) / kStep)] = true;
+void history_missing(const History& h, const HistoryMsg& m, std::vector<Sample>& out) {
+    out.clear();
+    // Held samples with a real clock, oldest first; i walks them alongside m.
+    size_t first = 0;
+    while (first < h.size() && h.at(first).t < kMinValidEpoch) first++;
+    const bool any = first < h.size();
+    const int64_t newest = any ? h.newest_epoch() : 0;
+    size_t i = first;
+    for (const Sample& s : m.samples) {
+        if (any && s.t + kStep > newest) break;          // live data's minutes
+        while (i < h.size() && h.at(i).t < s.t - kStep) i++;
+        const bool held = i < h.size() && h.at(i).t < s.t + 2 * kStep;
+        if (!held) out.push_back(s);
     }
-    for (const Sample& s : m.samples)
-        if (!have[(size_t)((s.t - m.from) / kStep)]) return true;
-    return false;
 }

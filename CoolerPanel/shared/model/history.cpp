@@ -46,17 +46,21 @@ const Sample& History::at(size_t i) const { return buf_[(head_ + i) % cap_]; }
 int64_t History::newest_epoch() const { return count_ ? at(count_ - 1).t : 0; }
 int64_t History::oldest_epoch() const { return count_ ? at(0).t : 0; }
 
-void History::merge_window(int64_t from, int64_t to, const Sample* s, size_t n) {
-    if (!buf_) return;
+void History::merge_in(const Sample* s, size_t n) {
+    if (!buf_ || n == 0) return;
     std::vector<Sample> out;
     out.reserve(count_ + n);
-    size_t i = 0;
-    for (; i < count_ && at(i).t < from; i++) out.push_back(at(i));
-    for (size_t k = 0; k < n; k++) out.push_back(s[k]);
-    for (; i < count_; i++)
-        if (at(i).t >= to) out.push_back(at(i));
+    size_t i = 0, k = 0;
+    while (i < count_ || k < n) {
+        if (k == n || (i < count_ && at(i).t <= s[k].t)) {
+            if (k < n && at(i).t == s[k].t) k++;   // held sample wins
+            out.push_back(at(i++));
+        } else {
+            out.push_back(s[k++]);
+        }
+    }
     size_t start = out.size() > cap_ ? out.size() - cap_ : 0;
     count_ = out.size() - start;
     head_ = 0;
-    for (size_t k = 0; k < count_; k++) buf_[k] = out[start + k];
+    for (size_t j = 0; j < count_; j++) buf_[j] = out[start + j];
 }

@@ -104,3 +104,28 @@ TEST_CASE("the trend window ends at now, so a sensor outage shows as a live gap"
     CHECK(chart_window_end(5000, 5000) == 5001);
     CHECK(chart_window_end(6000, 5000) == 6001);   // clock behind the data: never clip samples
 }
+
+TEST_CASE("a stretch sampled once a minute draws without holes at the 1 h zoom") {
+    // Node-RED's history is one sample a minute; at 1 h a column is ~35 s,
+    // so without bridging every other column would be blank (a comb).
+    History h;
+    REQUIRE(h.init(100));
+    for (int t = 0; t < 3600; t += 60) h.maybe_append(t, 4.0f, 80.0f, 30);
+    Column cols[102];
+    chart_downsample(h, 0, 3600, cols, 102);
+    for (int i = 0; i <= 100; i++) CHECK_MESSAGE(cols[i].has, "column ", i);
+}
+
+TEST_CASE("an empty column is still a gap when columns are wider than a minute") {
+    // At the 7 d zoom a column is ~100 min: one empty column is a real outage.
+    History h;
+    REQUIRE(h.init(100));
+    h.maybe_append(0, 4.0f, 80.0f, 30);
+    h.maybe_append(7000, 4.0f, 80.0f, 30);     // column 0 is [0,3000), 1 is [3000,6000)
+    Column cols[3];
+    chart_downsample(h, 0, 9000, cols, 3);
+    CHECK(cols[0].has);
+    CHECK_FALSE(cols[1].has);
+    CHECK(cols[2].has);
+}
+

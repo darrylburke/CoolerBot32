@@ -5,7 +5,9 @@
 // are executable-specific, not part of cooler_shared. Nothing needed these
 // symbols at link time until test_app_wiring.cpp started calling
 // app_on_mqtt_message(), which reaches platform_epoch_utc() internally.
-// This is a fixed, deterministic stand-in: no test asserts on the actual
-// epoch/tick value, only on behaviour that's independent of it.
+// A deterministic stand-in: 1700000000 unless a test moves it.
 extern "C" uint32_t platform_now_ms(void) { return 0; }
-extern "C" int64_t platform_epoch_utc(void) { return 1700000000; }
+// Settable for tests that need time to pass (test_platform_stub.h); every
+// test that changes it puts it back.
+int64_t g_test_epoch = 1700000000;
+extern "C" int64_t platform_epoch_utc(void) { return g_test_epoch; }

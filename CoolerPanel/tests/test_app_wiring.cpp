@@ -2,6 +2,7 @@
 #include "app.h"
 #include "history.h"
 #include "mqtt_router.h"
+#include "test_platform_stub.h"
 #include <string>
 #include <fstream>
 #include <sstream>
@@ -76,7 +77,7 @@ TEST_CASE("a /history message fills the minutes the panel never saw") {
     CHECK(panel_history().at(0).t == 1699999380);
     CHECK(panel_history().at(1).ac == 1);
 
-    // Delivered again, it adds no coverage: nothing changes.
+    // Delivered again, it has nothing the panel lacks: nothing changes.
     app_on_mqtt_message(topic.c_str(), (const uint8_t*)body.data(), body.size());
     CHECK(panel_history().size() == 2);
 }
@@ -88,3 +89,35 @@ TEST_CASE("a bad /history message leaves history alone") {
     app_on_mqtt_message(topic.c_str(), (const uint8_t*)body.data(), body.size());
     CHECK(panel_history().size() == 0);
 }
+
+TEST_CASE("a panel connected all along never takes history samples") {
+    // An hour of /data at roughly 30 s, jittered the way the controller's
+    // periodic and on-change publishes are, each followed by Node-RED's
+    // /history -- whose clock runs 3 s ahead of the panel's.
+    app_init_history();
+    const std::string dtopic = std::string(router_prefix()) + "/data";
+    const std::string htopic = std::string(router_prefix()) + "/history";
+    const std::string data = load("data_normal.json");
+    const int gaps[] = {30, 29, 31, 30, 32, 28, 30, 30, 5, 25};   // 5: an on-change publish
+    int64_t t = 1700000007;
+    const int64_t t0 = ((t + 3) / 60) * 60;
+    for (int k = 0; k < 120; k++) {
+        g_test_epoch = t;
+        app_on_mqtt_message(dtopic.c_str(), (const uint8_t*)data.data(), data.size());
+        const int n = (int)((((t + 3) / 60) * 60 - t0) / 60) + 1;
+        std::string temp, hum, relay;
+        for (int i = 0; i < n; i++) {
+            if (i) { temp += ","; hum += ","; relay += ","; }
+            temp += "33.3"; hum += "80"; relay += "0";
+        }
+        const std::string body = "{\"v\":1,\"t0\":" + std::to_string(t0) +
+            ",\"interval_s\":60,\"temp\":[" + temp + "],\"hum\":[" + hum + "],\"relay\":[" + relay + "]}";
+        app_on_mqtt_message(htopic.c_str(), (const uint8_t*)body.data(), body.size());
+        t += gaps[k % 10];
+    }
+    g_test_epoch = 1700000000;
+    REQUIRE(panel_history().size() == 84);   // every live sample the 30 s gate keeps, nothing else
+    for (size_t i = 0; i < panel_history().size(); i++)
+        CHECK(panel_history().at(i).temp_c10 != 333);   // 33.3 is only ever in /history
+}
+
