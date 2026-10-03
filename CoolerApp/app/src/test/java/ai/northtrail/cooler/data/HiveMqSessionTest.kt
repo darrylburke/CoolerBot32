@@ -4,6 +4,7 @@ import ai.northtrail.cooler.model.LinkState
 import ai.northtrail.cooler.model.Topics
 import com.hivemq.client.mqtt.MqttClientState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.net.ServerSocket
@@ -13,27 +14,50 @@ class HiveMqSessionTest {
     private val links = CopyOnWriteArrayList<LinkState>()
     private val messages = CopyOnWriteArrayList<IncomingMessage>()
 
-    private fun session(port: Int) = HiveMqSession(
+    private fun session(port: Int, topics: Topics = Topics()) = HiveMqSession(
         host = "127.0.0.1",
         port = port,
         username = "app-user",
         password = "x".toByteArray(),
         clientId = "test-${System.nanoTime()}",
         trustManagerFactory = null,
-        subscriptions = Topics().subscriptions,
+        subscriptions = topics.subscriptions,
+        optionalSubscriptions = topics.optionalSubscriptions,
         onLink = { state, _, _ -> links += state },
         onMessage = { messages += it },
     )
 
     @Test
-    fun subscribesToExactlyTheTwoCoolerTopics() {
+    fun subscribesToTheCoolerTopicsAndHistory() {
         FakeBroker().use { broker ->
             val s = session(broker.port)
             s.start()
             waitUntil { LinkState.CONNECTED in links }
             s.stop()
             assertTrue("links seen: $links", LinkState.CONNECTED in links)
-            assertEquals(listOf("cooler/data", "cooler/availability"), broker.subscribedTopics.toList())
+            assertEquals(listOf("cooler/data", "cooler/availability", "cooler/history"), broker.subscribedTopics.toList())
+        }
+    }
+
+    @Test
+    fun refusedOptionalSubscriptionStillConnects() {
+        FakeBroker(refuse = setOf("cooler/history")).use { broker ->
+            val s = session(broker.port)
+            s.start()
+            waitUntil { LinkState.CONNECTED in links }
+            s.stop()
+            assertFalse("links seen: $links", LinkState.REJECTED in links)
+        }
+    }
+
+    @Test
+    fun refusedRequiredSubscriptionIsRejected() {
+        FakeBroker(refuse = setOf("cooler/data")).use { broker ->
+            val s = session(broker.port)
+            s.start()
+            waitUntil { LinkState.REJECTED in links }
+            s.stop()
+            assertFalse("links seen: $links", LinkState.CONNECTED in links)
         }
     }
 

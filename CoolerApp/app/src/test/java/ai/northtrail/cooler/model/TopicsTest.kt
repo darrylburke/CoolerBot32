@@ -10,6 +10,7 @@ class TopicsTest {
         assertEquals("cooler/data", t.data)
         assertEquals("cooler/availability", t.availability)
         assertEquals("cooler/cmd", t.cmd)
+        assertEquals("cooler/history", t.history)
     }
 
     @Test
@@ -20,5 +21,10 @@ class TopicsTest {
     @Test
     fun surroundingSpaceAndTrailingSlashAreDropped() {
         assertEquals("cooler/data", Topics(" cooler/ ").data)
+    }
+
+    @Test
+    fun historyIsAnOptionalSubscription() {
+        assertEquals(listOf("barn/history"), Topics("barn").optionalSubscriptions)
     }
 }

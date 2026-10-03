@@ -9,12 +9,13 @@ import kotlin.concurrent.thread
 
 /**
  * Just enough of an MQTT 3.1.1 broker for tests: answers CONNECT with [connackCode],
- * records SUBSCRIBE topic filters, grants them, and optionally publishes one
+ * records SUBSCRIBE topic filters, grants them (or refuses those in [refuse]), and optionally publishes one
  * message (QoS 0) right after the SUBACK.
  */
 class FakeBroker(
     private val connackCode: Int = 0,
     private val publishAfterSubscribe: Pair<String, String>? = null,
+    private val refuse: Set<String> = emptySet(),
 ) : AutoCloseable {
     private val server = ServerSocket(0)
     val port: Int get() = server.localPort
@@ -54,7 +55,7 @@ class FakeBroker(
                     }
                     subscribedTopics += topics
                     out.write(byteArrayOf(0x90.toByte(), (2 + topics.size).toByte(), body[0], body[1]))
-                    out.write(ByteArray(topics.size) { 0x01 })
+                    out.write(ByteArray(topics.size) { if (topics[it] in refuse) 0x80.toByte() else 0x01 })
                     publishAfterSubscribe?.let { (topic, payload) -> out.write(publishPacket(topic, payload)) }
                 }
                 0xC0 -> out.write(byteArrayOf(0xD0.toByte(), 0x00)) // PINGREQ -> PINGRESP

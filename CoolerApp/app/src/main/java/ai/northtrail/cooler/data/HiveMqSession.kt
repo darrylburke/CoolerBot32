@@ -30,6 +30,7 @@ class HiveMqSession(
     clientId: String,
     trustManagerFactory: TrustManagerFactory?,
     private val subscriptions: List<String>,
+    private val optionalSubscriptions: List<String> = emptyList(),
     private val onLink: (LinkState, String, Long?) -> Unit,
     private val onMessage: (IncomingMessage) -> Unit,
 ) {
@@ -106,7 +107,7 @@ class HiveMqSession(
     private fun subscribe() {
         val request = Mqtt3Subscribe.builder()
             .addSubscriptions(
-                subscriptions.map { Mqtt3Subscription.builder().topicFilter(it).qos(MqttQos.AT_LEAST_ONCE).build() },
+                (subscriptions + optionalSubscriptions).map { Mqtt3Subscription.builder().topicFilter(it).qos(MqttQos.AT_LEAST_ONCE).build() },
             )
             .build()
         client.subscribe(request).whenComplete { ack, error ->
@@ -114,7 +115,8 @@ class HiveMqSession(
             when {
                 error != null ->
                     onLink(LinkState.DISCONNECTED, "Subscription failed: ${safeMessage(error)}", null)
-                ack.returnCodes.any { it == Mqtt3SubAckReturnCode.FAILURE } ->
+                // Required topics come first in the SUBACK; a refused optional one is not fatal.
+                ack.returnCodes.take(subscriptions.size).any { it == Mqtt3SubAckReturnCode.FAILURE } ->
                     onLink(LinkState.REJECTED, "Broker refused the subscription (check the ACL)", null)
                 else ->
                     onLink(LinkState.CONNECTED, "Connected | TLS", System.currentTimeMillis())

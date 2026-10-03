@@ -305,4 +305,24 @@ class CoolerControllerTest {
         emit("cooler/data", payload())
         assertEquals(0L, c.ui.value.health.dataAgeMillis)
     }
+
+    @Test
+    fun historyFillsTheTrend() = runTest {
+        val c = controller()
+        online()
+        emit(
+            "cooler/history",
+            """{"v":1,"t0":1790700000,"interval_s":60,"temp":[4.2,null,4.4],"hum":[80,81,82],"relay":[0,1,1]}""",
+        )
+        assertEquals(listOf(Sample(1_790_700_000, 4.2, false), Sample(1_790_700_120, 4.4, true)), c.ui.value.trend.all)
+    }
+
+    @Test
+    fun aBadHistoryIsIgnoredAndReported() = runTest {
+        val c = controller()
+        online()
+        emit("cooler/history", """{"v":7}""")
+        assertTrue(c.ui.value.trend.all.isEmpty())
+        assertEquals(listOf("ignored cooler/history: not cooler/history v1"), ignored)
+    }
 }

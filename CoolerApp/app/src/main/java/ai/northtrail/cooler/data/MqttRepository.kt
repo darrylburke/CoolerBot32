@@ -84,6 +84,7 @@ class MqttRepository(
             clientId = "cooler-${configStore.uiId()}",
             trustManagerFactory = trust,
             subscriptions = Topics(config.base).subscriptions,
+            optionalSubscriptions = Topics(config.base).optionalSubscriptions,
             // A superseded session must never overwrite the current link state.
             onLink = { state, detail, at -> setLinkFrom(created, config, state, detail, at) },
             onMessage = { if (session === created) mutableMessages.tryEmit(it) },

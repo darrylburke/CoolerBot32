@@ -7,6 +7,7 @@ import ai.northtrail.cooler.model.Commands
 import ai.northtrail.cooler.model.CoolerState
 import ai.northtrail.cooler.model.CoolerStateParser
 import ai.northtrail.cooler.model.Health
+import ai.northtrail.cooler.model.HistoryParser
 import ai.northtrail.cooler.model.LinkState
 import ai.northtrail.cooler.model.LinkStatus
 import ai.northtrail.cooler.model.Liveness
@@ -143,6 +144,14 @@ class CoolerController(
                         trend = trend,
                     )
                 }
+            }
+            t.history -> {
+                val w = HistoryParser.parse(m.payload, now / 1_000)
+                if (w == null) {
+                    onIgnored("ignored ${m.topic}: not cooler/history v${HistoryParser.VERSION}")
+                    return
+                }
+                update { it.copy(trend = it.trend.withHistory(w)) }
             }
         }
     }
