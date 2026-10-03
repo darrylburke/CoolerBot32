@@ -1,5 +1,6 @@
 package ai.northtrail.cooler.ui
 
+import ai.northtrail.cooler.model.AxisTicks
 import ai.northtrail.cooler.model.Sample
 import ai.northtrail.cooler.model.StatusText
 import ai.northtrail.cooler.model.TrendSegments
@@ -21,12 +22,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 
 /**
  * Box temperature from [fromEpochS] to [toEpochS]: the setpoint band shaded,
  * spans with the relay closed tinted, the temperature as a line that breaks
- * where samples are missing (see [TrendSegments]).
+ * where samples are missing (see [TrendSegments]), and whole-degree labels
+ * with faint gridlines down the left.
  */
 @Composable
 fun TrendChart(
@@ -51,6 +55,9 @@ fun TrendChart(
     val yMax = listOfNotNull(temps.max(), bandHi).max() + 1.0
     val span = (toEpochS - fromEpochS).coerceAtLeast(1).toFloat()
     val segments = TrendSegments.split(samples)
+    val ticks = AxisTicks.of(yMin, yMax)
+    val measurer = rememberTextMeasurer()
+    val tickStyle = MaterialTheme.typography.labelSmall.copy(color = CoolerColors.Muted)
 
     Column(modifier) {
         Row(Modifier.fillMaxWidth()) {
@@ -65,8 +72,23 @@ fun TrendChart(
                 .padding(vertical = 4.dp)
                 .background(CoolerColors.Surface, RoundedCornerShape(12.dp)),
         ) {
-            fun x(t: Long) = (t - fromEpochS) / span * size.width
+            // The labels get a gutter of their own; the plot starts after it.
+            val gutter = 28.dp.toPx()
+            val plotW = size.width - gutter
+            fun x(t: Long) = gutter + (t - fromEpochS) / span * plotW
             fun y(c: Double) = ((yMax - c) / (yMax - yMin)).toFloat() * size.height
+
+            ticks.forEach { v ->
+                drawLine(CoolerColors.Muted.copy(alpha = 0.25f), Offset(gutter, y(v)), Offset(size.width, y(v)), 1.dp.toPx())
+                val label = measurer.measure("%.0f".format(v), tickStyle)
+                drawText(
+                    label,
+                    topLeft = Offset(
+                        gutter - label.size.width - 4.dp.toPx(),
+                        (y(v) - label.size.height / 2f).coerceIn(0f, size.height - label.size.height),
+                    ),
+                )
+            }
 
             segments.forEach { seg ->
                 seg.zipWithNext().forEach { (a, b) ->
@@ -76,7 +98,7 @@ fun TrendChart(
                 }
             }
             if (bandLo != null && bandHi != null) {
-                drawRect(CoolerColors.Band, Offset(0f, y(bandHi)), Size(size.width, y(bandLo) - y(bandHi)))
+                drawRect(CoolerColors.Band, Offset(gutter, y(bandHi)), Size(plotW, y(bandLo) - y(bandHi)))
             }
             val line = Path()
             segments.forEach { seg ->
