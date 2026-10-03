@@ -63,3 +63,28 @@ TEST_CASE("the relay state is recorded with each sample") {
     REQUIRE(panel_history().size() == 1);
     CHECK(panel_history().at(0).ac == 1);
 }
+
+TEST_CASE("a /history message fills the minutes the panel never saw") {
+    app_init_history();
+    const std::string topic = std::string(router_prefix()) + "/history";
+    // platform_epoch_utc() is 1700000000 under test; t0 is 620 s earlier.
+    const std::string body =
+        "{\"v\":1,\"t0\":1699999380,\"interval_s\":60,"
+        "\"temp\":[4.2,null,4.4],\"hum\":[80,81,82],\"relay\":[0,1,1]}";
+    app_on_mqtt_message(topic.c_str(), (const uint8_t*)body.data(), body.size());
+    REQUIRE(panel_history().size() == 2);
+    CHECK(panel_history().at(0).t == 1699999380);
+    CHECK(panel_history().at(1).ac == 1);
+
+    // Delivered again, it adds no coverage: nothing changes.
+    app_on_mqtt_message(topic.c_str(), (const uint8_t*)body.data(), body.size());
+    CHECK(panel_history().size() == 2);
+}
+
+TEST_CASE("a bad /history message leaves history alone") {
+    app_init_history();
+    const std::string topic = std::string(router_prefix()) + "/history";
+    const std::string body = "{\"v\":9}";
+    app_on_mqtt_message(topic.c_str(), (const uint8_t*)body.data(), body.size());
+    CHECK(panel_history().size() == 0);
+}

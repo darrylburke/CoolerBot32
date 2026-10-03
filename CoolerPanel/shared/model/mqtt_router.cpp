@@ -11,6 +11,13 @@ void router_set_prefix(const char* prefix) {
 }
 const char* router_prefix(void) { return s_prefix; }
 
+bool router_is_leaf(const char* topic, const char* leaf) {
+    if (!topic || !leaf) return false;
+    size_t pn = std::strlen(s_prefix);
+    return std::strncmp(topic, s_prefix, pn) == 0 && topic[pn] == '/' &&
+           std::strcmp(topic + pn + 1, leaf) == 0;
+}
+
 bool route_message(CoolerState& s, const char* topic, const char* payload,
                    size_t len, int64_t now_epoch) {
     if (!topic || !payload) return false;

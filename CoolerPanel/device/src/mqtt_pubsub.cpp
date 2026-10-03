@@ -33,7 +33,7 @@ void mqtt_begin(const DeviceConfig& c) {
         s_mqtt.setClient(s_plain);
     }
     s_mqtt.setServer(s_cfg.mqtt_host.c_str(), s_cfg.mqtt_port);
-    s_mqtt.setBufferSize(4096);             // stats/session payloads > default 256
+    s_mqtt.setBufferSize(24576);            // /history from Node-RED is ~14 KB
     s_mqtt.setKeepAlive(30);
     s_mqtt.setCallback(on_message);
     app_set_link_state(LINK_MQTT_DOWN);
@@ -59,13 +59,14 @@ void mqtt_poll() {
     // which the backoff keeps rare.
     if (s_mqtt.connect(s_client_id.c_str(), s_cfg.mqtt_user.c_str(),
                        s_cfg.mqtt_pass.c_str())) {
-        // Two explicit subscriptions rather than a "<base>/#" wildcard: the
-        // panel only ever needs /data and /availability (app_on_mqtt_message
-        // ignores anything else it might see via route_message's prefix
-        // check anyway), and a wildcard would also pick up any /cmd echo or
-        // future subtree this device itself publishes to.
+        // Explicit subscriptions rather than a "<base>/#" wildcard: the
+        // panel only needs /data, /availability and /history, and a
+        // wildcard would also pick up any /cmd echo or future subtree this
+        // device itself publishes to. A broker ACL without /history just
+        // never delivers it; the panel then trends from live /data alone.
         s_mqtt.subscribe((s_cfg.mqtt_base + "/data").c_str(), 1);
         s_mqtt.subscribe((s_cfg.mqtt_base + "/availability").c_str(), 1);
+        s_mqtt.subscribe((s_cfg.mqtt_base + "/history").c_str(), 0);
         app_set_link_state(LINK_OK);
         s_backoff_ms = 1000;
         Serial.println("mqtt: connected + subscribed");

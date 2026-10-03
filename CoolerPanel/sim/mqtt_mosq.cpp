@@ -20,10 +20,11 @@ static std::string g_base;
 
 static void on_connect(struct mosquitto* m, void*, int rc) {
     if (rc == 0) {
-        // The same two exact topics the device subscribes to. The panel's
+        // The same exact topics the device subscribes to. The panel's
         // broker login may read only these (no <base>/# wildcard).
         mosquitto_subscribe(m, nullptr, (g_base + "/data").c_str(), 1);
         mosquitto_subscribe(m, nullptr, (g_base + "/availability").c_str(), 1);
+        mosquitto_subscribe(m, nullptr, (g_base + "/history").c_str(), 0);
         app_set_link_state(LINK_OK);
     }
     else { fprintf(stderr, "mqtt connect rc=%d\n", rc); app_set_link_state(LINK_MQTT_DOWN); }

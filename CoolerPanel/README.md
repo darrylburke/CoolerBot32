@@ -8,6 +8,8 @@ ESP32-S3-WROOM-1-N16R8). UI: LVGL 9.3 on Arduino/PlatformIO.
 
 - **Trend**: box temperature and humidity, run-state line, override-switch chip,
   coil temperature and AC cards, and a trend of recent history plus live data.
+  When Node-RED's `cooler/history` is available (see `../nodered/README.md`), the trend also
+  fills in the last 24 hours the panel missed, for example after a reboot.
 - **Settings**: the controller's ten settings in Box / Coil / Timing tabs, with limits.
 - **Detail**: every status field and fin calibration controls.
 - Alarm takeover for faults; night dimming; panel-local settings kept in NVS.
