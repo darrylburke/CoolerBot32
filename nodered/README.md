@@ -14,6 +14,8 @@ simply see live data only.
 2. Open the "Cooler broker (local)" config node and set the Security username and password
    to Node-RED's broker login (see the ACL below). If you already have a broker config for this
    Mosquitto, select it in the three MQTT nodes instead and delete the imported one.
+   Leave "Retain as published" (MQTT v5 only) unticked on the two `mqtt in` nodes: with it,
+   every live `cooler/data` arrives flagged retained and the flow ignores all of them.
 3. Deploy. Within 30 s, `mosquitto_sub -t cooler/history -C 1` shows a message.
 
 ## Broker

@@ -8,7 +8,7 @@ const tab = 'c001e70000000001', broker = 'c001e70000000002', fn = 'c001e70000000
 
 const mqttIn = (id, topic, datatype, y) => ({
   id, type: 'mqtt in', z: tab, name: topic, topic, qos: '1', datatype, broker,
-  nl: false, rap: true, rh: 0, inputs: 0, x: 170, y, wires: [[fn]],
+  nl: false, rap: false, rh: 0, inputs: 0, x: 170, y, wires: [[fn]],
 });
 
 const nodes = [

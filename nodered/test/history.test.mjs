@@ -30,10 +30,12 @@ test('the exported function is history.js verbatim', () => {
   assert.equal(fnNode.func, readFileSync(new URL('history.js', here), 'utf8'));
 });
 
-test('subscribes to exactly data and availability, retain as published', () => {
+test('subscribes to exactly data and availability, retain flag only on replays', () => {
   const ins = nodes.filter((n) => n.type === 'mqtt in');
   assert.deepEqual(ins.map((n) => n.topic).sort(), ['cooler/availability', 'cooler/data']);
-  assert.ok(ins.every((n) => n.rap === true));
+  // rap false: under MQTT v5 "retain as published" would keep retain=1 on every
+  // live forward of the retained cooler/data, and history.js would drop them all.
+  assert.ok(ins.every((n) => n.rap === false));
   const out = nodes.find((n) => n.type === 'mqtt out');
   assert.equal(out.topic, 'cooler/history');
   assert.equal(out.retain, 'false');
