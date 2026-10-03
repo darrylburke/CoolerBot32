@@ -52,6 +52,16 @@ void mqtt_poll() {
     app_set_link_state(LINK_MQTT_DOWN);
     uint32_t now = millis();
     if (now < s_next_attempt_ms) return;
+    // Hold the first connect until SNTP has set the clock. The connect's DNS
+    // lookup (hostByName) clears lwIP's DNS cache, and if SNTP's own lookup
+    // of pool.ntp.org is still pending, that fires SNTP's callback from this
+    // task and lwIP asserts ("Required to lock TCPIP core functionality!").
+    // TLS needs the right time to check the broker's certificate anyway.
+    // Give up waiting after kClockWaitMs so a blocked NTP cannot strand MQTT.
+    static constexpr uint32_t kClockWaitMs = 20000;
+    static uint32_t s_wifi_up_ms = 0;
+    if (s_wifi_up_ms == 0) s_wifi_up_ms = now ? now : 1;
+    if (time(nullptr) < 1600000000 && now - s_wifi_up_ms < kClockWaitMs) return;
     Serial.printf("mqtt: connecting to %s:%u%s as %s...\n", s_cfg.mqtt_host.c_str(),
                   s_cfg.mqtt_port, s_cfg.mqtt_port == 8883 ? " (TLS)" : "",
                   s_cfg.mqtt_user.c_str());
