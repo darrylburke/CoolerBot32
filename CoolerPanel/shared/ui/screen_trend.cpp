@@ -260,12 +260,12 @@ lv_obj_t* screen_trend_create(lv_obj_t* parent) {
         lv_label_set_text(s_ax_h[i], "");
     }
 
-    static const char* zooms[] = {"1h", "3h", "6h"};
-    static const int zsec[] = {3600, 10800, 21600};
-    for (int i = 0; i < 3; i++) {
+    static const char* zooms[] = {"1h", "3h", "6h", "12h"};
+    static const int zsec[] = {3600, 10800, 21600, 43200};
+    for (int i = 0; i < 4; i++) {
         lv_obj_t* b = lv_button_create(s_root);
-        lv_obj_set_size(b, 76, 32);
-        lv_obj_set_pos(b, PAD + i * 84, ZOOM_Y);
+        lv_obj_set_size(b, 60, 32);
+        lv_obj_set_pos(b, PAD + i * 66, ZOOM_Y);
         lv_obj_set_style_bg_color(b, th_surface(), 0);
         lv_obj_set_style_radius(b, 16, 0);
         lv_obj_t* l = lv_label_create(b);

@@ -69,7 +69,7 @@ TEST_CASE("humidity thresholds clamp to 0..100") {
     CHECK(r.hum_high == 100);
 }
 
-TEST_CASE("the trend zooms are 1 h, 3 h and 6 h; anything else falls back to 3 h") {
+TEST_CASE("the trend zooms are 1 h, 3 h, 6 h and 12 h; anything else falls back to 3 h") {
     PanelConfig r;
     REQUIRE(panel_config_from_json("{\"default_zoom_s\":10800}", r));
     CHECK(r.default_zoom_s == 10800);
@@ -77,6 +77,8 @@ TEST_CASE("the trend zooms are 1 h, 3 h and 6 h; anything else falls back to 3 h
     CHECK(r.default_zoom_s == 21600);
     REQUIRE(panel_config_from_json("{\"default_zoom_s\":3600}", r));
     CHECK(r.default_zoom_s == 3600);
+    REQUIRE(panel_config_from_json("{\"default_zoom_s\":43200}", r));
+    CHECK(r.default_zoom_s == 43200);
     REQUIRE(panel_config_from_json("{\"default_zoom_s\":86400}", r));
     CHECK(r.default_zoom_s == 10800);
     REQUIRE(panel_config_from_json("{\"default_zoom_s\":604800}", r));
