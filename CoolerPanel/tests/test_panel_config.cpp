@@ -9,7 +9,7 @@ TEST_CASE("defaults match the design spec") {
     CHECK(c.alarm.holdoff_s == 1800);
     CHECK(c.backlight == 80);
     CHECK(c.night_dim == true);
-    CHECK(c.default_zoom_s == 3600);
+    CHECK(c.default_zoom_s == 10800);
     CHECK(c.hum_low == 50);
     CHECK(c.hum_high == 80);
 }
@@ -38,7 +38,7 @@ TEST_CASE("absent keys fall back to defaults") {
     REQUIRE(panel_config_from_json("{\"backlight\":25}", r));
     CHECK(r.backlight == 25);
     CHECK(r.alarm.silent_s == 300);      // default preserved
-    CHECK(r.default_zoom_s == 3600);
+    CHECK(r.default_zoom_s == 10800);
 }
 
 TEST_CASE("malformed json is rejected") {
@@ -69,15 +69,17 @@ TEST_CASE("humidity thresholds clamp to 0..100") {
     CHECK(r.hum_high == 100);
 }
 
-TEST_CASE("the trend zooms are 1 h, 3 h and 6 h; a retired 24 h or 7 d falls back to 1 h") {
+TEST_CASE("the trend zooms are 1 h, 3 h and 6 h; anything else falls back to 3 h") {
     PanelConfig r;
     REQUIRE(panel_config_from_json("{\"default_zoom_s\":10800}", r));
     CHECK(r.default_zoom_s == 10800);
     REQUIRE(panel_config_from_json("{\"default_zoom_s\":21600}", r));
     CHECK(r.default_zoom_s == 21600);
+    REQUIRE(panel_config_from_json("{\"default_zoom_s\":3600}", r));
+    CHECK(r.default_zoom_s == 3600);
     REQUIRE(panel_config_from_json("{\"default_zoom_s\":86400}", r));
-    CHECK(r.default_zoom_s == 3600);
+    CHECK(r.default_zoom_s == 10800);
     REQUIRE(panel_config_from_json("{\"default_zoom_s\":604800}", r));
-    CHECK(r.default_zoom_s == 3600);
+    CHECK(r.default_zoom_s == 10800);
 }
 

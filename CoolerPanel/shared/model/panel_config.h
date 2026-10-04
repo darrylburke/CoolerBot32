@@ -8,7 +8,7 @@ struct PanelConfig {
     AlarmCfg alarm;              // thresholds + hold-off (spec section 7)
     int  backlight = 80;         // percent, 5..100
     bool night_dim = true;
-    int  default_zoom_s = 3600;  // 3600 | 10800 | 21600
+    int  default_zoom_s = 10800; // 3600 | 10800 | 21600
 
     // Humidity band for the Trend card's colour. A walk-in wants HIGH humidity
     // (dry air desiccates produce) but not so high it condenses on the coil,

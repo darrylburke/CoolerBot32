@@ -175,3 +175,24 @@ TEST_CASE("humidity joins midpoint to midpoint") {
     CHECK(f.hi == doctest::Approx(81.0f));
 }
 
+
+TEST_CASE("both traces show by default and each toggles") {
+    SeriesShown s;
+    CHECK(s.temp);
+    CHECK(s.rh);
+    CHECK(series_toggle(s, Series::Rh));
+    CHECK(s.temp);
+    CHECK_FALSE(s.rh);
+    CHECK(series_toggle(s, Series::Rh));
+    CHECK(s.rh);
+}
+
+TEST_CASE("the last visible trace cannot be hidden") {
+    SeriesShown s;
+    REQUIRE(series_toggle(s, Series::Temp));      // temp hidden, RH showing
+    CHECK_FALSE(series_toggle(s, Series::Rh));    // refused: graph would be blank
+    CHECK(s.rh);
+    CHECK_FALSE(s.temp);
+    CHECK(series_toggle(s, Series::Temp));        // showing temp again is fine
+    CHECK(s.temp);
+}

@@ -71,6 +71,14 @@ Span chart_joined_rh(const Column* cols, size_t i) {
     return Span{mid < pm ? mid : pm, mid > pm ? mid : pm};
 }
 
+bool series_toggle(SeriesShown& s, Series which) {
+    bool& mine  = which == Series::Temp ? s.temp : s.rh;
+    bool& other = which == Series::Temp ? s.rh : s.temp;
+    if (mine && !other) return false;
+    mine = !mine;
+    return true;
+}
+
 int64_t chart_window_end(int64_t newest_epoch, int64_t now_epoch) {
     return (now_epoch > newest_epoch ? now_epoch : newest_epoch) + 1;
 }

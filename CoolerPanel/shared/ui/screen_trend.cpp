@@ -69,7 +69,41 @@ static lv_obj_t* s_age_lbl;
 // "is override on?" never needs reading the status card.
 static lv_obj_t* s_sw_chip; static lv_obj_t* s_sw_lbl;
 static lv_color_t* s_cbuf;
-static int s_zoom = 3600;
+static int s_zoom = 10800;
+static SeriesShown s_shown;        // both traces; not kept across reboots
+static lv_obj_t* s_chip_t;
+static lv_obj_t* s_chip_h;
+
+static void draw_graph(void);
+
+static void chip_style(lv_obj_t* chip, bool on, lv_color_t ink) {
+    lv_obj_set_style_bg_color(chip, th_surface(), 0);
+    lv_obj_set_style_bg_opa(chip, on ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(chip, on ? 0 : 1, 0);
+    lv_obj_set_style_border_color(chip, th_muted(), 0);
+    lv_obj_set_style_text_color(lv_obj_get_child(chip, 0), on ? ink : th_muted(), 0);
+}
+
+static void chips_style(void) {
+    chip_style(s_chip_t, s_shown.temp, th_ink2());
+    chip_style(s_chip_h, s_shown.rh, th_rh());
+}
+
+static lv_obj_t* chip_create(int x, const char* text, Series which) {
+    lv_obj_t* b = lv_button_create(s_root);
+    lv_obj_set_size(b, 80, 32);
+    lv_obj_set_pos(b, x, ZOOM_Y);
+    lv_obj_set_style_radius(b, 16, 0);
+    lv_obj_set_style_shadow_width(b, 0, 0);
+    lv_obj_t* l = lv_label_create(b);
+    lv_label_set_text(l, text);
+    lv_obj_center(l);
+    lv_obj_add_event_cb(b, [](lv_event_t* e) {
+        Series w = (Series)(intptr_t)lv_event_get_user_data(e);
+        if (series_toggle(s_shown, w)) { chips_style(); draw_graph(); }
+    }, LV_EVENT_CLICKED, (void*)(intptr_t)which);
+    return b;
+}
 static lv_obj_t* s_ax_t[3];
 static lv_obj_t* s_ax_h[3];
 
@@ -230,8 +264,8 @@ lv_obj_t* screen_trend_create(lv_obj_t* parent) {
     static const int zsec[] = {3600, 10800, 21600};
     for (int i = 0; i < 3; i++) {
         lv_obj_t* b = lv_button_create(s_root);
-        lv_obj_set_size(b, 100, 32);
-        lv_obj_set_pos(b, 60 + i * 120, ZOOM_Y);
+        lv_obj_set_size(b, 76, 32);
+        lv_obj_set_pos(b, PAD + i * 84, ZOOM_Y);
         lv_obj_set_style_bg_color(b, th_surface(), 0);
         lv_obj_set_style_radius(b, 16, 0);
         lv_obj_t* l = lv_label_create(b);
@@ -242,6 +276,11 @@ lv_obj_t* screen_trend_create(lv_obj_t* parent) {
             trend_set_zoom((int)(intptr_t)lv_event_get_user_data(e));
         }, LV_EVENT_CLICKED, (void*)(intptr_t)zsec[i]);
     }
+
+    // Show/hide chips, coloured like their traces; dim and outlined when off.
+    s_chip_t = chip_create(288, "Temp", Series::Temp);
+    s_chip_h = chip_create(376, "RH", Series::Rh);
+    chips_style();
 
     s_foot_lbl = lv_label_create(s_root);
     lv_obj_set_pos(s_foot_lbl, PAD, FOOT_Y);
@@ -312,7 +351,7 @@ static void draw_graph(void) {
         if (cols[i].hmin < hlo) hlo = cols[i].hmin;
         if (cols[i].hmax > hhi) hhi = cols[i].hmax;
     }
-    const bool have_rh = (hlo <= hhi);
+    const bool have_rh = s_shown.rh && (hlo <= hhi);
     if (have_rh) {
         if (hhi - hlo < 2.0f) { hhi = hlo + 2.0f; }
         const float hpad = (hhi - hlo) * 0.1f;
@@ -326,7 +365,7 @@ static void draw_graph(void) {
     char tk[16];
     for (int i = 0; i < 3; i++) {
         snprintf(tk, sizeof(tk), "%.0f", (double)(hi - (hi - lo) * i / 2.0f));
-        lv_label_set_text(s_ax_t[i], tk);
+        lv_label_set_text(s_ax_t[i], s_shown.temp ? tk : "");
         if (have_rh) {
             snprintf(tk, sizeof(tk), "%.0f", (double)(hhi - (hhi - hlo) * i / 2.0f));
             lv_label_set_text(s_ax_h[i], tk);
@@ -341,7 +380,7 @@ static void draw_graph(void) {
     band.bg_color = lv_color_hex(0x212a26);
     band.bg_opa = LV_OPA_60;
     lv_area_t ba = {0, y_of(band_hi), GRAPH_W - 1, y_of(band_lo)};
-    lv_draw_rect(&layer, &band, &ba);
+    if (s_shown.temp) lv_draw_rect(&layer, &band, &ba);   // the band is the temperature's
 
     // Temperature min/max bars, cyan where the controller was requesting
     // cooling for most of the column -- the same cyan the status card wears
@@ -357,7 +396,7 @@ static void draw_graph(void) {
     bar.bg_opa = LV_OPA_COVER;
     const int32_t colw = GRAPH_W / NCOLS;
     for (int i = 0; i < NCOLS; i++) {
-        if (!cols[i].has) continue;      // gap stays blank
+        if (!cols[i].has || !s_shown.temp) continue;      // gap stays blank
         bar.bg_color = cols[i].ac ? th_cool() : th_ink2();
         const Span sp = chart_joined_temp(cols, i);   // meets its neighbour
         int32_t y0 = y_of(sp.hi);

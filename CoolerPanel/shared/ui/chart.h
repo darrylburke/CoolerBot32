@@ -32,6 +32,13 @@ struct Span { float lo, hi; };
 Span chart_joined_temp(const Column* cols, size_t i);
 Span chart_joined_rh(const Column* cols, size_t i);
 
+// Which traces the trend draws; both by default. series_toggle() flips one
+// and returns true, but refuses (returns false) to hide the last one shown,
+// so the graph is never blank.
+enum class Series { Temp, Rh };
+struct SeriesShown { bool temp = true; bool rh = true; };
+bool series_toggle(SeriesShown& s, Series which);
+
 // Exclusive right edge of the trend window: now, or the newest sample if the
 // clock is behind it. Anchoring to now (not the newest sample) makes a sensor
 // outage -- which stops history growing -- show as a gap on the right rather
