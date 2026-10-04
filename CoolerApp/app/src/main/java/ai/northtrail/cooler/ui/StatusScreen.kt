@@ -5,6 +5,7 @@ import ai.northtrail.cooler.model.Chip
 import ai.northtrail.cooler.model.Series
 import ai.northtrail.cooler.model.SeriesShown
 import ai.northtrail.cooler.model.StatusText
+import ai.northtrail.cooler.model.TrendAverage
 import ai.northtrail.cooler.model.TrendWindow
 import ai.northtrail.cooler.model.TrendZoom
 import androidx.compose.foundation.background
@@ -83,8 +84,11 @@ fun StatusScreen(ui: UiState, nowEpochS: Long, modifier: Modifier = Modifier) {
         var zoom by rememberSaveable { mutableStateOf(TrendZoom.DEFAULT) }
         var showTemp by rememberSaveable { mutableStateOf(true) }
         var showRh by rememberSaveable { mutableStateOf(true) }
-        val shown = SeriesShown(showTemp, showRh)
+        var showAvg by rememberSaveable { mutableStateOf(true) }
+        val shown = SeriesShown(showTemp, showRh, showAvg)
         val window = TrendWindow.of(zoom, nowEpochS)
+        // The rolling mean at the left edge needs the hour before it.
+        val withLead = ui.trend.samples(window.fromEpochS - TrendAverage.WINDOW_S)
         TrendChart(
             samples = ui.trend.samples(window.fromEpochS),
             fromEpochS = window.fromEpochS,
@@ -93,19 +97,22 @@ fun StatusScreen(ui: UiState, nowEpochS: Long, modifier: Modifier = Modifier) {
             setpoint = s?.settings?.get("coolerset"),
             range = s?.settings?.get("range"),
             shown = shown,
+            average = TrendAverage.rolling(withLead, window.fromEpochS),
+            windowMean = TrendAverage.mean(withLead, window.fromEpochS, window.toEpochS),
             modifier = Modifier.fillMaxWidth().height(220.dp).padding(horizontal = 16.dp).padding(top = 16.dp),
         )
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             TrendZoom.entries.forEach { z ->
                 ToggleChip(z.label, on = z == zoom, onColor = CoolerColors.Accent) { zoom = z }
             }
             Spacer(Modifier.weight(1f))
-            fun apply(next: SeriesShown) { showTemp = next.temp; showRh = next.rh }
+            fun apply(next: SeriesShown) { showTemp = next.temp; showRh = next.rh; showAvg = next.avg }
             ToggleChip("Temp", on = showTemp, onColor = CoolerColors.Accent) { apply(shown.toggled(Series.TEMP)) }
             ToggleChip("RH", on = showRh, onColor = CoolerColors.Humidity) { apply(shown.toggled(Series.RH)) }
+            ToggleChip("Avg", on = showAvg, onColor = CoolerColors.Average) { apply(shown.toggled(Series.AVG)) }
         }
     }
 }
@@ -116,13 +123,13 @@ private fun ToggleChip(text: String, on: Boolean, onColor: Color, onClick: () ->
     Text(
         text,
         color = if (on) onColor else CoolerColors.Muted,
-        style = MaterialTheme.typography.labelLarge,
+        style = MaterialTheme.typography.labelMedium,
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
             .background(if (on) CoolerColors.Surface else Color.Transparent)
             .border(1.dp, if (on) Color.Transparent else CoolerColors.Muted.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
     )
 }
 

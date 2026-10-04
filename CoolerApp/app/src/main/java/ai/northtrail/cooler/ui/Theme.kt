@@ -21,6 +21,8 @@ object CoolerColors {
     val RelayTint = Color(0x2278C8FF)
     /** Humidity trace and its axis: the panel's olive, lifted for this darker background. */
     val Humidity = Color(0xFFA9BC8A)
+    /** The rolling-average line: soft, so the raw trace stays the subject. */
+    val Average = Color(0xCCE6EDF3)
 }
 
 @Composable

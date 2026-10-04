@@ -35,8 +35,9 @@ import androidx.compose.ui.unit.dp
  * Box temperature and humidity from [fromEpochS] to [toEpochS]. Temperature: the
  * setpoint band shaded, spans with the relay closed tinted, a line, and whole-degree
  * labels on the left. Humidity: a thinner line on its own scale, labelled on the
- * right. [shown] hides either. Lines break where samples are missing (see
- * [TrendSegments]).
+ * right. [average] is the 1-hour rolling mean (see [TrendAverage]) drawn over the
+ * temperature, with [windowMean] as "avg" in the header. [shown] hides any of them.
+ * Lines break where samples are missing (see [TrendSegments]).
  */
 @Composable
 fun TrendChart(
@@ -47,6 +48,8 @@ fun TrendChart(
     setpoint: Int?,
     range: Int?,
     shown: SeriesShown,
+    average: List<Pair<Long, Double>> = emptyList(),
+    windowMean: Double? = null,
     modifier: Modifier = Modifier,
 ) {
     if (samples.size < 2) {
@@ -75,6 +78,13 @@ fun TrendChart(
         Row(Modifier.fillMaxWidth()) {
             if (shown.temp) {
                 Text("max ${StatusText.temp(temps.max())}°", color = CoolerColors.Muted, style = MaterialTheme.typography.labelSmall)
+            }
+            if (shown.avg && windowMean != null) {
+                Text(
+                    "   avg ${StatusText.temp(windowMean)}°",
+                    color = CoolerColors.Average,
+                    style = MaterialTheme.typography.labelSmall,
+                )
             }
             Spacer(Modifier.weight(1f))
             Text(windowLabel, color = CoolerColors.Muted, style = MaterialTheme.typography.labelSmall)
@@ -119,6 +129,18 @@ fun TrendChart(
                 trace(rhRuns, CoolerColors.Humidity, 1.5f, { x(it.epochS) }, { hy(it.humidity!!) })
             }
             if (shown.temp) trace(segments, CoolerColors.Accent, 2f, { x(it.epochS) }, { y(it.tempC) })
+            if (shown.avg && average.size >= 2) {
+                // The rolling mean is smooth by construction; one path, broken only
+                // where the record (and so the mean) has a hole.
+                val line = Path()
+                var prev: Long? = null
+                average.forEach { (t, v) ->
+                    val px = x(t).coerceAtLeast(left)
+                    if (prev == null || t - prev!! > TrendSegments.MIN_GAP_S) line.moveTo(px, y(v)) else line.lineTo(px, y(v))
+                    prev = t
+                }
+                drawPath(line, CoolerColors.Average, style = Stroke(width = 2.dp.toPx()))
+            }
         }
         if (shown.temp) {
             Text("min ${StatusText.temp(temps.min())}°", color = CoolerColors.Muted, style = MaterialTheme.typography.labelSmall)

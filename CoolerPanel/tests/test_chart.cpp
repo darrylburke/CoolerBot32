@@ -196,3 +196,68 @@ TEST_CASE("the last visible trace cannot be hidden") {
     CHECK(series_toggle(s, Series::Temp));        // showing temp again is fine
     CHECK(s.temp);
 }
+
+// ---- rolling average ------------------------------------------------------
+
+static void fill(History& h, int64_t from, int n, int step, float (*f)(int)) {
+    for (int i = 0; i < n; i++) h.maybe_append(from + (int64_t)i * step, f(i), 80.0f, 0);
+}
+
+TEST_CASE("window mean is time-weighted and skips gaps") {
+    History h;
+    REQUIRE(h.init(500));
+    fill(h, 0, 11, 60, [](int) { return 4.0f; });          // 10 min at 4
+    fill(h, 10000, 11, 60, [](int) { return 6.0f; });      // gap, then 10 min at 6
+    float m = 0;
+    REQUIRE(chart_window_mean(h, 0, 20000, m));
+    CHECK(m == doctest::Approx(5.0f));
+    History empty;
+    REQUIRE(empty.init(10));
+    CHECK_FALSE(chart_window_mean(empty, 0, 3600, m));
+}
+
+TEST_CASE("rolling mean flattens an hourly sawtooth to its average") {
+    History h;
+    REQUIRE(h.init(500));
+    fill(h, 0, 181, 60, [](int i) { return (i % 60) / 10.0f; });   // 3 h, 0..5.9 each hour
+    float out[30]; bool has[30];
+    chart_rolling_avg(h, 3600, 10800, 30, out, has);
+    for (int c = 0; c < 30; c++) {
+        REQUIRE(has[c]);
+        CHECK(out[c] == doctest::Approx(2.95f).epsilon(0.03));
+    }
+}
+
+TEST_CASE("rolling mean needs a whole hour on record behind it") {
+    History h;
+    REQUIRE(h.init(500));
+    fill(h, 0, 181, 60, [](int) { return 4.0f; });
+    float out[10]; bool has[10];
+    chart_rolling_avg(h, 0, 10800, 10, out, has);    // columns end at 1080, 2160, ... s
+    CHECK_FALSE(has[0]);                              // 1080 s: not an hour in yet
+    CHECK_FALSE(has[2]);                              // 3240 s
+    CHECK(has[3]);                                    // 4320 s
+    CHECK(out[3] == doctest::Approx(4.0f));
+}
+
+TEST_CASE("rolling mean pauses after an outage") {
+    History h;
+    REQUIRE(h.init(500));
+    fill(h, 0, 121, 60, [](int) { return 4.0f; });               // 0..2 h
+    fill(h, 10800, 121, 60, [](int) { return 4.0f; });           // 3..5 h
+    float out[18]; bool has[18];
+    chart_rolling_avg(h, 0, 18000, 18, out, has);                // column c ends at (c+1)*1000 s
+    CHECK(has[6]);                                                // [3400, 7000]: all on record
+    for (int c = 7; c <= 13; c++) CHECK_MESSAGE(!has[c], "column ", c);   // the gap is in its hour
+    CHECK(has[14]);                                               // [11400, 15000]: all on record
+}
+
+TEST_CASE("the average line toggles freely and is not a trace") {
+    SeriesShown s;
+    CHECK(s.avg);
+    CHECK(series_toggle(s, Series::Avg));
+    CHECK_FALSE(s.avg);
+    SeriesShown t;
+    REQUIRE(series_toggle(t, Series::Rh));            // temp only, avg on
+    CHECK_FALSE(series_toggle(t, Series::Temp));      // still refused
+}

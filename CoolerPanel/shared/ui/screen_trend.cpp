@@ -73,6 +73,8 @@ static int s_zoom = 10800;
 static SeriesShown s_shown;        // both traces; not kept across reboots
 static lv_obj_t* s_chip_t;
 static lv_obj_t* s_chip_h;
+static lv_obj_t* s_chip_a;
+static lv_obj_t* s_avg_lbl;          // "avg 3.9" over the graph's top right
 
 static void draw_graph(void);
 
@@ -87,11 +89,12 @@ static void chip_style(lv_obj_t* chip, bool on, lv_color_t ink) {
 static void chips_style(void) {
     chip_style(s_chip_t, s_shown.temp, th_ink2());
     chip_style(s_chip_h, s_shown.rh, th_rh());
+    chip_style(s_chip_a, s_shown.avg, th_ink());
 }
 
 static lv_obj_t* chip_create(int x, const char* text, Series which) {
     lv_obj_t* b = lv_button_create(s_root);
-    lv_obj_set_size(b, 80, 32);
+    lv_obj_set_size(b, 56, 32);
     lv_obj_set_pos(b, x, ZOOM_Y);
     lv_obj_set_style_radius(b, 16, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
@@ -278,9 +281,20 @@ lv_obj_t* screen_trend_create(lv_obj_t* parent) {
     }
 
     // Show/hide chips, coloured like their traces; dim and outlined when off.
-    s_chip_t = chip_create(288, "Temp", Series::Temp);
-    s_chip_h = chip_create(376, "RH", Series::Rh);
+    s_chip_t = chip_create(284, "Temp", Series::Temp);
+    s_chip_h = chip_create(346, "RH", Series::Rh);
+    s_chip_a = chip_create(408, "Avg", Series::Avg);
     chips_style();
+
+    s_avg_lbl = lv_label_create(s_root);
+    lv_obj_set_pos(s_avg_lbl, GRAPH_X + GRAPH_W - 76, GRAPH_Y + 4);
+    lv_obj_set_style_text_color(s_avg_lbl, th_ink(), 0);
+    // It sits over the plot: a backing keeps it readable across the trace.
+    lv_obj_set_style_bg_color(s_avg_lbl, th_page(), 0);
+    lv_obj_set_style_bg_opa(s_avg_lbl, LV_OPA_80, 0);
+    lv_obj_set_style_pad_hor(s_avg_lbl, 4, 0);
+    lv_obj_set_style_radius(s_avg_lbl, 4, 0);
+    lv_label_set_text(s_avg_lbl, "");
 
     s_foot_lbl = lv_label_create(s_root);
     lv_obj_set_pos(s_foot_lbl, PAD, FOOT_Y);
@@ -292,6 +306,7 @@ lv_obj_t* screen_trend_create(lv_obj_t* parent) {
 
 static void axis_clear(void) {
     for (int i = 0; i < 3; i++) { lv_label_set_text(s_ax_t[i], ""); lv_label_set_text(s_ax_h[i], ""); }
+    if (s_avg_lbl) lv_label_set_text(s_avg_lbl, "");
 }
 
 // "12s" / "4m" / "2h". Terse: it shares the header row.
@@ -425,6 +440,36 @@ static void draw_graph(void) {
             lv_draw_rect(&layer, &rh, &a);
         }
     }
+
+    // Rolling 1 h mean: a thin bright line over the trace, joined column to
+    // column, broken where the record cannot support a whole hour.
+    char abuf[24] = "";
+    if (s_shown.avg) {
+        static float avg[NCOLS];
+        static bool has[NCOLS];
+        chart_rolling_avg(h, from, to, NCOLS, avg, has);
+        lv_draw_rect_dsc_t ad;
+        lv_draw_rect_dsc_init(&ad);
+        ad.bg_color = th_ink();
+        ad.bg_opa = LV_OPA_COVER;
+        for (int i = 0; i < NCOLS; i++) {
+            if (!has[i]) continue;
+            float lo_v = avg[i], hi_v = avg[i];
+            if (i > 0 && has[i - 1]) {
+                if (avg[i - 1] < lo_v) lo_v = avg[i - 1];
+                if (avg[i - 1] > hi_v) hi_v = avg[i - 1];
+            }
+            int32_t y0 = y_of(hi_v), y1 = y_of(lo_v);
+            if (y0 < 0) y0 = 0;
+            if (y1 > GRAPH_H - 1) y1 = GRAPH_H - 1;
+            if (y1 - y0 < 2) y0 = y1 - 2;
+            lv_area_t a = {i * colw, y0, i * colw + colw - 1, y1};
+            lv_draw_rect(&layer, &ad, &a);
+        }
+        float m;
+        if (chart_window_mean(h, from, to, m)) snprintf(abuf, sizeof(abuf), "avg %.1f", (double)m);
+    }
+    lv_label_set_text(s_avg_lbl, abuf);
     lv_canvas_finish_layer(s_canvas, &layer);
 }
 

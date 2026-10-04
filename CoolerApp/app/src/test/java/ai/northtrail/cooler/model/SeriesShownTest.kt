@@ -20,4 +20,13 @@ class SeriesShownTest {
         assertEquals(rhOnly, rhOnly.toggled(Series.RH))
         assertEquals(SeriesShown(), rhOnly.toggled(Series.TEMP))
     }
+
+    @Test
+    fun theAverageLineTogglesFreelyAndDoesNotCountAsATrace() {
+        val s = SeriesShown()
+        assertEquals(true, s.avg)
+        assertEquals(false, s.toggled(Series.AVG).avg)
+        val tempOnly = SeriesShown(temp = true, rh = false, avg = false)
+        assertEquals(tempOnly, tempOnly.toggled(Series.TEMP))   // still refused: avg is no trace
+    }
 }
