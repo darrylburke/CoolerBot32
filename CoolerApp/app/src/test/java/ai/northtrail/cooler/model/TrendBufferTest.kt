@@ -91,4 +91,9 @@ class TrendBufferTest {
         val w = HistoryWindow(1_000, 1_060, listOf(Sample(1_000, 3.0, false)))
         assertEquals(2, TrendBuffer().withHistory(w).appended(1_030, 3.2, true).all.size)
     }
+
+    @Test
+    fun liveSamplesKeepTheirHumidity() {
+        assertEquals(listOf(Sample(1_000, 4.0, true, 81.0)), TrendBuffer().appended(1_000, 4.0, true, 81.0).all)
+    }
 }

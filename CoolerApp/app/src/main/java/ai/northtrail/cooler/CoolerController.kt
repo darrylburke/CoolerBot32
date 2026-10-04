@@ -136,7 +136,7 @@ class CoolerController(
                 update { cur ->
                     var trend = cur.trend
                     if (m.retained || trend.all.isEmpty()) trend = trend.seeded(parsed)
-                    if (!m.retained) trend = trend.appended(now / 1_000, parsed.temp, parsed.relay)
+                    if (!m.retained) trend = trend.appended(now / 1_000, parsed.temp, parsed.relay, parsed.humidity)
                     cur.copy(
                         state = parsed,
                         stateLiveAtMillis = if (m.retained) null else now,

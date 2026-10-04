@@ -90,7 +90,7 @@ class CoolerControllerTest {
         runCurrent()
         emit("cooler/data", payload())
         assertEquals(0L, c.ui.value.health.dataAgeMillis)
-        assertEquals(listOf(Sample(5, 4.8, false)), c.ui.value.trend.all)
+        assertEquals(listOf(Sample(5, 4.8, false, 70.0)), c.ui.value.trend.all)
     }
 
     @Test
@@ -314,7 +314,7 @@ class CoolerControllerTest {
             "cooler/history",
             """{"v":1,"t0":1790700000,"interval_s":60,"temp":[4.2,null,4.4],"hum":[80,81,82],"relay":[0,1,1]}""",
         )
-        assertEquals(listOf(Sample(1_790_700_000, 4.2, false), Sample(1_790_700_120, 4.4, true)), c.ui.value.trend.all)
+        assertEquals(listOf(Sample(1_790_700_000, 4.2, false, 80.0), Sample(1_790_700_120, 4.4, true, 82.0)), c.ui.value.trend.all)
     }
 
     @Test

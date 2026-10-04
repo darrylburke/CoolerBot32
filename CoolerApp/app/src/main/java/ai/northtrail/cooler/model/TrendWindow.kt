@@ -1,20 +1,21 @@
 package ai.northtrail.cooler.model
 
-/** The time axis of the trend: the history we actually have, capped at 24 h. */
+/** The trend's time spans, matching the wall panel's buttons; it opens on [DEFAULT]. */
+enum class TrendZoom(val spanS: Long, val label: String) {
+    H1(3_600, "1h"),
+    H3(10_800, "3h"),
+    H6(21_600, "6h"),
+    H12(43_200, "12h");
+
+    companion object {
+        val DEFAULT = H3
+    }
+}
+
+/** The time axis of the trend: the chosen span, ending now. */
 data class TrendWindow(val fromEpochS: Long, val toEpochS: Long, val label: String) {
     companion object {
-        const val MAX_SPAN_S = 24 * 3_600L
-        const val MIN_SPAN_S = 600L
-
-        fun of(samples: List<Sample>, nowS: Long): TrendWindow {
-            val first = samples.firstOrNull()?.epochS ?: nowS
-            val from = minOf(maxOf(nowS - MAX_SPAN_S, first), nowS - MIN_SPAN_S)
-            return TrendWindow(from, nowS, "last ${spanText(nowS - from)}")
-        }
-
-        private fun spanText(secs: Long): String = when {
-            secs < 3_600 -> "${(secs + 30) / 60} min"
-            else -> "${(secs + 1_800) / 3_600} h"
-        }
+        fun of(zoom: TrendZoom, nowS: Long): TrendWindow =
+            TrendWindow(nowS - zoom.spanS, nowS, "last ${zoom.spanS / 3_600} h")
     }
 }

@@ -19,6 +19,8 @@ object CoolerColors {
     val BadBackground = Color(0xFF3A1616)
     val Band = Color(0x3378C8FF)
     val RelayTint = Color(0x2278C8FF)
+    /** Humidity trace and its axis: the panel's olive, lifted for this darker background. */
+    val Humidity = Color(0xFFA9BC8A)
 }
 
 @Composable

@@ -1,7 +1,10 @@
 package ai.northtrail.cooler.model
 
-/** One point on the trend. [relay] is null for samples seeded from the controller's history. */
-data class Sample(val epochS: Long, val tempC: Double, val relay: Boolean?)
+/**
+ * One point on the trend. [relay] is null for samples seeded from the controller's history;
+ * [humidity] (%RH) is null when the reading had none.
+ */
+data class Sample(val epochS: Long, val tempC: Double, val relay: Boolean?, val humidity: Double? = null)
 
 /**
  * Box temperature over time: the controller's short history (seed) plus live
@@ -20,12 +23,12 @@ class TrendBuffer private constructor(val all: List<Sample>) {
         return merged(seed)
     }
 
-    fun appended(epochS: Long, tempC: Double?, relay: Boolean): TrendBuffer {
+    fun appended(epochS: Long, tempC: Double?, relay: Boolean, humidity: Double? = null): TrendBuffer {
         if (tempC == null) return this
         val newest = all.lastOrNull()?.epochS
         // /data also publishes on every change; keep bursts from over-sampling.
         if (newest != null && epochS - newest < MIN_GAP_S) return this
-        return merged(listOf(Sample(epochS, tempC, relay)))
+        return merged(listOf(Sample(epochS, tempC, relay, humidity)))
     }
 
     /** Node-RED's record replaces whatever this buffer holds inside the window's span. */

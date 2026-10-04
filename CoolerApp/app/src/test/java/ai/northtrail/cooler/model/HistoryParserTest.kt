@@ -23,13 +23,13 @@ class HistoryParserTest {
         val w = HistoryParser.parse(body(), now)!!
         assertEquals(t0, w.fromS)
         assertEquals(t0 + 180, w.toS)
-        assertEquals(listOf(Sample(t0, 4.2, false), Sample(t0 + 120, 4.4, true)), w.samples)
+        assertEquals(listOf(Sample(t0, 4.2, false, 80.0), Sample(t0 + 120, 4.4, true, null)), w.samples)
     }
 
     @Test
     fun nullRelayIsUnknown() {
         val w = HistoryParser.parse(body(temp = "4.2", hum = "80", relay = "null"), now)!!
-        assertEquals(listOf(Sample(t0, 4.2, null)), w.samples)
+        assertEquals(listOf(Sample(t0, 4.2, null, 80.0)), w.samples)
     }
 
     @Test

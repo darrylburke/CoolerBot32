@@ -2,9 +2,14 @@ package ai.northtrail.cooler.ui
 
 import ai.northtrail.cooler.UiState
 import ai.northtrail.cooler.model.Chip
+import ai.northtrail.cooler.model.Series
+import ai.northtrail.cooler.model.SeriesShown
 import ai.northtrail.cooler.model.StatusText
 import ai.northtrail.cooler.model.TrendWindow
+import ai.northtrail.cooler.model.TrendZoom
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -21,8 +26,14 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
@@ -67,7 +78,13 @@ fun StatusScreen(ui: UiState, nowEpochS: Long, modifier: Modifier = Modifier) {
             Text("Coil ${StatusText.temp(s?.finTemp)} °C", modifier = Modifier.weight(1f))
             Text("Compressor ${StatusText.compressor(s)}")
         }
-        val window = TrendWindow.of(ui.trend.samples(nowEpochS - TrendWindow.MAX_SPAN_S), nowEpochS)
+        // View choices live with this screen only: like the panel, the app opens on
+        // 3 h with both traces every time.
+        var zoom by rememberSaveable { mutableStateOf(TrendZoom.DEFAULT) }
+        var showTemp by rememberSaveable { mutableStateOf(true) }
+        var showRh by rememberSaveable { mutableStateOf(true) }
+        val shown = SeriesShown(showTemp, showRh)
+        val window = TrendWindow.of(zoom, nowEpochS)
         TrendChart(
             samples = ui.trend.samples(window.fromEpochS),
             fromEpochS = window.fromEpochS,
@@ -75,9 +92,38 @@ fun StatusScreen(ui: UiState, nowEpochS: Long, modifier: Modifier = Modifier) {
             windowLabel = window.label,
             setpoint = s?.settings?.get("coolerset"),
             range = s?.settings?.get("range"),
-            modifier = Modifier.fillMaxWidth().height(220.dp).padding(16.dp),
+            shown = shown,
+            modifier = Modifier.fillMaxWidth().height(220.dp).padding(horizontal = 16.dp).padding(top = 16.dp),
         )
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            TrendZoom.entries.forEach { z ->
+                ToggleChip(z.label, on = z == zoom, onColor = CoolerColors.Accent) { zoom = z }
+            }
+            Spacer(Modifier.weight(1f))
+            fun apply(next: SeriesShown) { showTemp = next.temp; showRh = next.rh }
+            ToggleChip("Temp", on = showTemp, onColor = CoolerColors.Accent) { apply(shown.toggled(Series.TEMP)) }
+            ToggleChip("RH", on = showRh, onColor = CoolerColors.Humidity) { apply(shown.toggled(Series.RH)) }
+        }
     }
+}
+
+/** A pill that reads as selected (filled, in [onColor]) or not (outlined, muted). */
+@Composable
+private fun ToggleChip(text: String, on: Boolean, onColor: Color, onClick: () -> Unit) {
+    Text(
+        text,
+        color = if (on) onColor else CoolerColors.Muted,
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (on) CoolerColors.Surface else Color.Transparent)
+            .border(1.dp, if (on) Color.Transparent else CoolerColors.Muted.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    )
 }
 
 @Composable

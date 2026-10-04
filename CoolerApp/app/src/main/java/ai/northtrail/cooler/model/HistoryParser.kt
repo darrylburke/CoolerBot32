@@ -36,7 +36,7 @@ object HistoryParser {
         val samples = (0 until n).mapNotNull { i ->
             val t = temp[i].number() ?: return@mapNotNull null
             val r = when (relay[i].number()?.toInt()) { 1 -> true; 0 -> false; else -> null }
-            Sample(t0 + i * INTERVAL_S, t, r)
+            Sample(t0 + i * INTERVAL_S, t, r, hum[i].number())
         }
         return HistoryWindow(t0, toS, samples)
     }
