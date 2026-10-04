@@ -3,6 +3,10 @@
 #include <lvgl.h>
 #include <time.h>
 #include "display_gfx.h"
+#include "backlight_policy.h"
+#include "app.h"
+#include "alarm.h"
+#include "platform.h"
 
 static const uint8_t kLevels[] = {255, 128, 40};   // 100% / 50% / 15% -- the
                                                     // physical-button cycle's
@@ -14,6 +18,7 @@ static int s_level_idx = 2;   // which preset the NEXT button press lands on;
 static uint8_t s_user = 255;       // current daytime ("user") level, 0..255
 static bool s_night_dim = true;    // Task 16's PanelConfig::night_dim
 static uint32_t s_manual_ms = 0;   // last button change counts as activity
+static uint32_t s_boot_ms = 0;     // so does boot: the panel starts bright
 static uint8_t s_cur = 255;
 
 static void apply(uint8_t want) {
@@ -48,6 +53,7 @@ void backlight_apply_config(int percent, bool night_dim) {
 }
 
 void backlight_init() {
+    s_boot_ms = millis();
     apply(s_user);   // don't wait for the first 1 s tick
     lv_timer_create([](lv_timer_t*) {
         uint8_t user = s_user;
@@ -60,10 +66,13 @@ void backlight_init() {
                 night = (lt.tm_hour >= 23 || lt.tm_hour < 7);
             }
         }
-        uint32_t last = display_last_touch_ms();
-        bool awake = (last != 0 && millis() - last < 30000) ||
-                     (s_manual_ms != 0 && millis() - s_manual_ms < 30000);
-        uint8_t want = (!night || awake) ? user : (user < 50 ? user : 50);
-        apply(want);
+        // Time since the most recent activity: boot, a touch, or the button.
+        const uint32_t now = millis();
+        uint32_t idle = now - s_boot_ms;
+        const uint32_t touch = display_last_touch_ms();
+        if (touch != 0 && now - touch < idle) idle = now - touch;
+        if (s_manual_ms != 0 && now - s_manual_ms < idle) idle = now - s_manual_ms;
+        const bool alarm = panel_alarms().active(platform_epoch_utc()) != AlarmId::None;
+        apply(backlight_level(user, night, idle, alarm));
     }, 1000, nullptr);
 }

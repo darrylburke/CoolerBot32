@@ -34,6 +34,7 @@ add_executable(cooler_tests
     tests/test_state.cpp
     tests/test_history.cpp
     tests/test_history_msg.cpp
+    tests/test_backlight_policy.cpp
     tests/test_chart.cpp
     tests/test_app_wiring.cpp
     tests/test_platform_stub.cpp

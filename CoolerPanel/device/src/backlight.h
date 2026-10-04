@@ -1,8 +1,8 @@
 #pragma once
-// Night dimming (spec §8 / display_design §5.4): ~20% brightness 23:00–07:00
-// local time, the user level during the day, and back to the user level for
-// 30 s after any touch. Requires display_init() (PWM + touch) and an LVGL
-// timer pump.
+// Dimming (see shared/model/backlight_policy.h): ~20% brightness after 30 min
+// without a touch or button press, and 23:00–07:00 local time 30 s after the
+// last one; an unacknowledged alarm keeps the screen bright. Requires
+// display_init() (PWM + touch) and an LVGL timer pump.
 void backlight_init();
 
 // Cycle the user brightness level: 100% -> 50% -> 15% -> 100% (physical
