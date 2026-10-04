@@ -103,7 +103,9 @@ static lv_obj_t* chip_create(int x, const char* text, Series which) {
     lv_obj_center(l);
     lv_obj_add_event_cb(b, [](lv_event_t* e) {
         Series w = (Series)(intptr_t)lv_event_get_user_data(e);
-        if (series_toggle(s_shown, w)) { chips_style(); draw_graph(); }
+        series_toggle(s_shown, w);
+        chips_style();
+        draw_graph();
     }, LV_EVENT_CLICKED, (void*)(intptr_t)which);
     return b;
 }
@@ -380,7 +382,8 @@ static void draw_graph(void) {
     char tk[16];
     for (int i = 0; i < 3; i++) {
         snprintf(tk, sizeof(tk), "%.0f", (double)(hi - (hi - lo) * i / 2.0f));
-        lv_label_set_text(s_ax_t[i], s_shown.temp ? tk : "");
+        // The average line is drawn on the temperature scale too.
+        lv_label_set_text(s_ax_t[i], (s_shown.temp || s_shown.avg) ? tk : "");
         if (have_rh) {
             snprintf(tk, sizeof(tk), "%.0f", (double)(hhi - (hhi - hlo) * i / 2.0f));
             lv_label_set_text(s_ax_h[i], tk);

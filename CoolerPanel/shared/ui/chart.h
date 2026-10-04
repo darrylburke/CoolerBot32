@@ -32,15 +32,10 @@ struct Span { float lo, hi; };
 Span chart_joined_temp(const Column* cols, size_t i);
 Span chart_joined_rh(const Column* cols, size_t i);
 
-// Which traces the trend draws; both by default. series_toggle() flips one
-// and returns true, but refuses (returns false) to hide the last one shown,
-// so the graph is never blank.
-//
-// The rolling average (Series::Avg) is an overlay, not a trace: it toggles
-// freely and does not count towards "never neither".
+// Which traces the trend draws: all by default, and any or all can be hidden.
 enum class Series { Temp, Rh, Avg };
 struct SeriesShown { bool temp = true; bool rh = true; bool avg = true; };
-bool series_toggle(SeriesShown& s, Series which);
+void series_toggle(SeriesShown& s, Series which);
 
 // Temperature averages, time-weighted the way the trace is drawn: straight
 // lines between samples, with any two samples more than kAvgMaxGapS apart

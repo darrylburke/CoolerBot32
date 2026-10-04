@@ -123,13 +123,9 @@ void chart_rolling_avg(const History& h, int64_t from, int64_t to, size_t ncols,
     }
 }
 
-bool series_toggle(SeriesShown& s, Series which) {
-    if (which == Series::Avg) { s.avg = !s.avg; return true; }
-    bool& mine  = which == Series::Temp ? s.temp : s.rh;
-    bool& other = which == Series::Temp ? s.rh : s.temp;
-    if (mine && !other) return false;
-    mine = !mine;
-    return true;
+void series_toggle(SeriesShown& s, Series which) {
+    bool& b = which == Series::Temp ? s.temp : which == Series::Rh ? s.rh : s.avg;
+    b = !b;
 }
 
 int64_t chart_window_end(int64_t newest_epoch, int64_t now_epoch) {

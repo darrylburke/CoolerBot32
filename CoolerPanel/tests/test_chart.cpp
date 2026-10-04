@@ -176,24 +176,28 @@ TEST_CASE("humidity joins midpoint to midpoint") {
 }
 
 
-TEST_CASE("both traces show by default and each toggles") {
+TEST_CASE("all three show by default and each toggles on its own") {
     SeriesShown s;
     CHECK(s.temp);
     CHECK(s.rh);
-    CHECK(series_toggle(s, Series::Rh));
+    CHECK(s.avg);
+    series_toggle(s, Series::Rh);
     CHECK(s.temp);
     CHECK_FALSE(s.rh);
-    CHECK(series_toggle(s, Series::Rh));
+    CHECK(s.avg);
+    series_toggle(s, Series::Rh);
     CHECK(s.rh);
 }
 
-TEST_CASE("the last visible trace cannot be hidden") {
+TEST_CASE("any or all of the traces can be hidden") {
     SeriesShown s;
-    REQUIRE(series_toggle(s, Series::Temp));      // temp hidden, RH showing
-    CHECK_FALSE(series_toggle(s, Series::Rh));    // refused: graph would be blank
-    CHECK(s.rh);
+    series_toggle(s, Series::Temp);
+    series_toggle(s, Series::Rh);
+    series_toggle(s, Series::Avg);
     CHECK_FALSE(s.temp);
-    CHECK(series_toggle(s, Series::Temp));        // showing temp again is fine
+    CHECK_FALSE(s.rh);
+    CHECK_FALSE(s.avg);
+    series_toggle(s, Series::Temp);
     CHECK(s.temp);
 }
 
@@ -252,12 +256,3 @@ TEST_CASE("rolling mean pauses after an outage") {
     CHECK(has[14]);                                               // [11400, 15000]: all on record
 }
 
-TEST_CASE("the average line toggles freely and is not a trace") {
-    SeriesShown s;
-    CHECK(s.avg);
-    CHECK(series_toggle(s, Series::Avg));
-    CHECK_FALSE(s.avg);
-    SeriesShown t;
-    REQUIRE(series_toggle(t, Series::Rh));            // temp only, avg on
-    CHECK_FALSE(series_toggle(t, Series::Temp));      // still refused
-}

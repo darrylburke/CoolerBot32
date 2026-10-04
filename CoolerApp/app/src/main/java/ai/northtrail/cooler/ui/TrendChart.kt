@@ -69,7 +69,9 @@ fun TrendChart(
     val hMax = (hums.maxOrNull() ?: 0.0) + 2.0
     val span = (toEpochS - fromEpochS).coerceAtLeast(1).toFloat()
     val segments = TrendSegments.split(samples)
-    val tempTicks = if (shown.temp) AxisTicks.of(yMin, yMax) else emptyList()
+    // The average line is drawn on the temperature scale too.
+    val tempScale = shown.temp || shown.avg
+    val tempTicks = if (tempScale) AxisTicks.of(yMin, yMax) else emptyList()
     val rhTicks = if (showRh) AxisTicks.of(hMin, hMax) else emptyList()
     val measurer = rememberTextMeasurer()
     val tickStyle = MaterialTheme.typography.labelSmall
@@ -97,7 +99,7 @@ fun TrendChart(
                 .background(CoolerColors.Surface, RoundedCornerShape(12.dp)),
         ) {
             // Each shown scale gets a gutter of its own; the plot sits between them.
-            val left = if (shown.temp) 28.dp.toPx() else 4.dp.toPx()
+            val left = if (tempScale) 28.dp.toPx() else 4.dp.toPx()
             val right = size.width - (if (showRh) 32.dp.toPx() else 4.dp.toPx())
             val plotW = right - left
             fun x(t: Long) = left + (t - fromEpochS) / span * plotW
