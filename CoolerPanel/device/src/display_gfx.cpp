@@ -16,6 +16,7 @@
 //   Panel init:     st7701_type1_init_operations via 3-wire SPI bit-banged
 //                   through the TCA9554 (Arduino_XCA9554SWSPI)
 #include "display_gfx.h"
+#include "backlight.h"
 #include "platform.h"
 #include <Arduino.h>
 #include <Wire.h>
@@ -140,16 +141,22 @@ static volatile bool s_pressed = false;
 static volatile int16_t s_last_x = 0, s_last_y = 0;
 static volatile uint32_t s_last_touch_ms = 0;
 
+// A touch that starts while the backlight is off only wakes the screen: LVGL
+// sees no press until the finger lifts, so nothing unseen gets tapped.
+static bool s_waking = false;
+
 static void touch_read_cb(lv_indev_t*, lv_indev_data_t* data) {
     int16_t x[1], y[1];
     if (s_touch_ok && s_touch.getPoint(x, y, 1) > 0) {
+        if (!s_pressed && backlight_is_off()) s_waking = true;
         s_pressed = true; s_last_x = x[0]; s_last_y = y[0];
         s_last_touch_ms = millis();
-        data->state = LV_INDEV_STATE_PRESSED;
+        data->state = s_waking ? LV_INDEV_STATE_RELEASED : LV_INDEV_STATE_PRESSED;
         data->point.x = x[0];
         data->point.y = y[0];
     } else {
         s_pressed = false;
+        s_waking = false;
         data->state = LV_INDEV_STATE_RELEASED;
     }
 }

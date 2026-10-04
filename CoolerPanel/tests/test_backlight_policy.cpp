@@ -3,24 +3,29 @@
 
 static const uint32_t MIN = 60u * 1000u;
 
-TEST_CASE("daytime: full brightness until 30 min without a touch, then dim") {
-    CHECK(backlight_level(255, false, 0, false) == 255);
-    CHECK(backlight_level(255, false, 29 * MIN, false) == 255);
-    CHECK(backlight_level(255, false, 30 * MIN, false) == kBacklightDim);
-    CHECK(backlight_level(255, false, 300 * MIN, false) == kBacklightDim);
+TEST_CASE("by day the backlight goes off after 30 min without a touch") {
+    CHECK(kIdleDimMs == 30 * MIN);
 }
 
-TEST_CASE("night: dim 30 s after a touch, as before") {
-    CHECK(backlight_level(255, true, 10 * 1000, false) == 255);
-    CHECK(backlight_level(255, true, 30 * 1000, false) == kBacklightDim);
+TEST_CASE("daytime: on until the idle timeout, then the backlight goes off") {
+    CHECK(backlight_level(204, false, 0, false) == 204);
+    CHECK(backlight_level(204, false, kIdleDimMs - 1, false) == 204);
+    CHECK(backlight_level(204, false, kIdleDimMs, false) == 0);
+    CHECK(backlight_level(204, false, 300 * MIN, false) == 0);
 }
 
-TEST_CASE("an alarm keeps the screen bright, day or night") {
-    CHECK(backlight_level(255, false, 300 * MIN, true) == 255);
-    CHECK(backlight_level(255, true, 300 * MIN, true) == 255);
+TEST_CASE("night: dim to 5% 30 s after a touch, not off") {
+    CHECK(kBacklightDim == 13);   // 13/255 ~ 5%: LED brightness looks far higher than its duty
+    CHECK(backlight_level(204, true, 10 * 1000, false) == 204);
+    CHECK(backlight_level(204, true, 30 * 1000, false) == kBacklightDim);
 }
 
-TEST_CASE("dimming never raises a level already below the dim level") {
-    CHECK(backlight_level(30, false, 300 * MIN, false) == 30);
-    CHECK(backlight_level(30, false, 0, false) == 30);
+TEST_CASE("an alarm keeps the screen on, day or night") {
+    CHECK(backlight_level(204, false, 300 * MIN, true) == 204);
+    CHECK(backlight_level(204, true, 300 * MIN, true) == 204);
+}
+
+TEST_CASE("night dimming never raises a level already below the dim level") {
+    CHECK(backlight_level(10, true, 300 * MIN, false) == 10);
+    CHECK(backlight_level(10, true, 0, false) == 10);
 }

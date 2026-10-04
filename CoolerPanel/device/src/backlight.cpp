@@ -36,7 +36,11 @@ static uint8_t pct_to_255(int pct) {
     return (uint8_t)((pct * 255 + 50) / 100);
 }
 
+bool backlight_is_off() { return s_cur == 0; }
+
 void backlight_cycle() {
+    // A press on a dark screen only wakes it; the next press cycles.
+    if (s_cur == 0) { s_manual_ms = millis(); return; }
     s_level_idx = (s_level_idx + 1) % (int)(sizeof kLevels / sizeof kLevels[0]);
     s_user = kLevels[s_level_idx];
     s_manual_ms = millis();
@@ -73,6 +77,7 @@ void backlight_init() {
         if (touch != 0 && now - touch < idle) idle = now - touch;
         if (s_manual_ms != 0 && now - s_manual_ms < idle) idle = now - s_manual_ms;
         const bool alarm = panel_alarms().active(platform_epoch_utc()) != AlarmId::None;
-        apply(backlight_level(user, night, idle, alarm));
-    }, 1000, nullptr);
+        const uint8_t want = backlight_level(user, night, idle, alarm);
+        apply(want);
+    }, 250, nullptr);   // 250 ms: a touch on a dark screen lights it at once
 }
