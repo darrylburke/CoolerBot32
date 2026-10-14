@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 #include "chart.h"
 #include "history.h"
+#include <string>
 
 TEST_CASE("downsample buckets samples into columns") {
     History h;
@@ -256,3 +257,25 @@ TEST_CASE("rolling mean pauses after an outage") {
     CHECK(has[14]);                                               // [11400, 15000]: all on record
 }
 
+
+TEST_CASE("latest average: the hour ending now, or unknown") {
+    History h;
+    REQUIRE(h.init(500));
+    fill(h, 0, 181, 60, [](int i) { return (i % 60) / 10.0f; });   // 3 h hourly sawtooth
+    float m = 0;
+    REQUIRE(chart_latest_avg(h, 10800, m));
+    CHECK(m == doctest::Approx(2.95f).epsilon(0.03));
+    CHECK_FALSE(chart_latest_avg(h, 20000, m));                      // data stopped 2.5 h ago
+    History young;
+    REQUIRE(young.init(100));
+    fill(young, 0, 31, 60, [](int) { return 4.0f; });               // only 30 min
+    CHECK_FALSE(chart_latest_avg(young, 1800, m));
+}
+
+TEST_CASE("the readout shows the average or dashes") {
+    char b[16];
+    chart_avg_text(true, 4.04f, b, sizeof b);
+    CHECK(std::string(b) == "4.0");
+    chart_avg_text(false, 0, b, sizeof b);
+    CHECK(std::string(b) == "-.-");
+}

@@ -61,4 +61,23 @@ class TrendAverageTest {
         val s = series(0, 181) { 4.0 }
         assertTrue(TrendAverage.rolling(s, fromS = 7_200).all { it.first >= 7_200 })
     }
+
+    @Test
+    fun latestIsTheHourEndingNow() {
+        val s = series(0, 181) { (it % 60) / 10.0 }        // 3 h of hourly sawtooth
+        assertEquals(2.95, TrendAverage.latest(s, nowS = 10_800)!!, 0.1)
+    }
+
+    @Test
+    fun latestIsUnknownWithoutAWholeHourOrWhenStale() {
+        assertNull(TrendAverage.latest(series(0, 31) { 4.0 }, nowS = 1_800))      // only 30 min
+        assertNull(TrendAverage.latest(emptyList(), nowS = 3_600))
+        assertNull(TrendAverage.latest(series(0, 181) { 4.0 }, nowS = 20_000))    // data stopped 2.5 h ago
+    }
+
+    @Test
+    fun readoutShowsTheAverageOrDashes() {
+        assertEquals("4.0", TrendAverage.text(4.04))
+        assertEquals("-.-", TrendAverage.text(null))
+    }
 }

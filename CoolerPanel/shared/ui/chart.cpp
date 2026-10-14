@@ -1,5 +1,6 @@
 #include "chart.h"
 #include "history.h"
+#include <cstdio>
 
 // Which unit held a column, from its tally of samples. Ties go to the lower
 // unit number, and a tie against "off" goes to the unit: a column that was
@@ -105,22 +106,35 @@ bool chart_window_mean(const History& h, int64_t from, int64_t to, float& out) {
     return true;
 }
 
+// Mean over the kAvgWindowS ending at te; false when the record does not
+// reach back to the window's start or covers less than 90% of it.
+static bool mean_ending(const History& h, int64_t te, float& out) {
+    if (h.size() < 2) return false;
+    const int64_t a = te - kAvgWindowS;
+    if (a < h.oldest_epoch()) return false;
+    double area, cover;
+    integrate(h, a, te, area, cover);
+    if (cover < 0.9 * kAvgWindowS) return false;
+    out = (float)(area / cover);
+    return true;
+}
+
 void chart_rolling_avg(const History& h, int64_t from, int64_t to, size_t ncols,
                        float* out, bool* has) {
     for (size_t c = 0; c < ncols; c++) has[c] = false;
-    if (ncols == 0 || to <= from || h.size() < 2) return;
-    const int64_t start = h.oldest_epoch();
+    if (ncols == 0 || to <= from) return;
     const int64_t span = to - from;
-    for (size_t c = 0; c < ncols; c++) {
-        const int64_t te = from + (span * (int64_t)(c + 1)) / (int64_t)ncols;
-        const int64_t a = te - kAvgWindowS;
-        if (a < start) continue;
-        double area, cover;
-        integrate(h, a, te, area, cover);
-        if (cover < 0.9 * kAvgWindowS) continue;
-        out[c] = (float)(area / cover);
-        has[c] = true;
-    }
+    for (size_t c = 0; c < ncols; c++)
+        has[c] = mean_ending(h, from + (span * (int64_t)(c + 1)) / (int64_t)ncols, out[c]);
+}
+
+bool chart_latest_avg(const History& h, int64_t now, float& out) {
+    return mean_ending(h, now, out);
+}
+
+void chart_avg_text(bool has, float v, char* buf, size_t n) {
+    if (has) snprintf(buf, n, "%.1f", (double)v);
+    else     snprintf(buf, n, "-.-");
 }
 
 void series_toggle(SeriesShown& s, Series which) {

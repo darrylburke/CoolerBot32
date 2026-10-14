@@ -114,6 +114,7 @@ static lv_obj_t* s_ax_h[3];
 
 // big temperature block
 static lv_obj_t* s_big_box; static lv_obj_t* s_big_n; static lv_obj_t* s_big_u; static lv_obj_t* s_big_s;
+static lv_obj_t* s_big_a;   // "/ 4.0": the 1-hour rolling average after the reading
 // side stack + pills: a panel with a small key, a value, and an optional icon
 struct Cell { lv_obj_t* box; lv_obj_t* k; lv_obj_t* v; lv_obj_t* ic; };
 static Cell s_hum, s_coil, s_state, s_comp;
@@ -223,6 +224,9 @@ lv_obj_t* screen_trend_create(lv_obj_t* parent) {
     lv_obj_set_pos(s_big_n, 18, 14);
     lv_obj_set_style_text_font(s_big_n, &lv_font_montserrat_48, 0);
     lv_obj_set_style_text_color(s_big_n, th_ink(), 0);
+    s_big_a = lv_label_create(s_big_box);
+    lv_obj_set_style_text_font(s_big_a, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_color(s_big_a, th_ink(), 0);   // the average line's colour
     s_big_u = lv_label_create(s_big_box);
     lv_obj_set_pos(s_big_u, 168, 30);
     lv_obj_set_style_text_font(s_big_u, &lv_font_montserrat_28, 0);
@@ -497,6 +501,22 @@ void screen_trend_refresh(void) {
     if (st.valid && st.temp_valid) snprintf(buf, sizeof(buf), "%.1f", (double)st.temp);
     else                           snprintf(buf, sizeof(buf), "--.-");
     lv_label_set_text(s_big_n, buf);
+    // Current / 1-hour rolling average: the right-hand end of the graph's
+    // average line, or "-.-" until a whole hour is on record. The unit follows
+    // whatever width the two numbers take.
+    {
+        float avg = 0;
+        char abuf[16], line[24];
+        // Two statements on purpose: as one call's arguments, `avg` could be
+        // read before chart_latest_avg() fills it (evaluation order is unset).
+        const bool has_avg = chart_latest_avg(panel_history(), platform_epoch_utc(), avg);
+        chart_avg_text(has_avg, avg, abuf, sizeof abuf);
+        snprintf(line, sizeof line, "/ %s", abuf);
+        lv_label_set_text(s_big_a, line);
+        lv_obj_update_layout(s_big_box);
+        lv_obj_align_to(s_big_a, s_big_n, LV_ALIGN_OUT_RIGHT_BOTTOM, 10, -6);
+        lv_obj_align_to(s_big_u, s_big_a, LV_ALIGN_OUT_RIGHT_BOTTOM, 10, 0);
+    }
     // In override the panel's setpoint is NOT in force -- say so where the
     // setpoint normally is, in the warning colour, and name the cause.
     if (st.valid && cooler_in_override(st)) {

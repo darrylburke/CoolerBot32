@@ -54,6 +54,14 @@ bool chart_window_mean(const History& h, int64_t from, int64_t to, float& out);
 void chart_rolling_avg(const History& h, int64_t from, int64_t to, size_t ncols,
                        float* out, bool* has);
 
+// The rolling mean for the hour ending `now` (same rule as a column) -- what
+// the big readout shows next to the current temperature. False without a
+// whole hour on record behind now (just booted, or the data stopped).
+bool chart_latest_avg(const History& h, int64_t now, float& out);
+
+// One decimal, or "-.-" while there is no average yet.
+void chart_avg_text(bool has, float v, char* buf, size_t n);
+
 // Exclusive right edge of the trend window: now, or the newest sample if the
 // clock is behind it. Anchoring to now (not the newest sample) makes a sensor
 // outage -- which stops history growing -- show as a gap on the right rather

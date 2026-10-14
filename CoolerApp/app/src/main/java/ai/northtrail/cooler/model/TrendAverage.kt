@@ -1,5 +1,7 @@
 package ai.northtrail.cooler.model
 
+import java.util.Locale
+
 /**
  * Time-weighted temperature averages over the trend. The record is integrated as the
  * chart draws it -- straight lines between samples, broken where [TrendSegments]
@@ -31,17 +33,35 @@ object TrendAverage {
      */
     fun rolling(samples: List<Sample>, fromS: Long): List<Pair<Long, Double>> {
         val segs = segments(samples)
-        val start = segs.minOfOrNull { it.t.first() } ?: return emptyList()
         val out = ArrayList<Pair<Long, Double>>()
         for (s in samples) {
             if (s.epochS < fromS) continue
-            val a = s.epochS - WINDOW_S
-            if (a < start) continue
-            val cover = segs.sumOf { it.cover(a, s.epochS) }
-            if (cover < MIN_COVER * WINDOW_S) continue
-            out += s.epochS to segs.sumOf { it.area(s.epochS) - it.area(a) } / cover
+            meanEnding(segs, s.epochS)?.let { out += s.epochS to it }
         }
         return out
+    }
+
+    /**
+     * The rolling mean for the hour ending [nowS] -- what the big readout shows next
+     * to the current temperature. Null without a whole hour on record behind now
+     * (just started, or the data stopped), shown as [text]'s "-.-".
+     */
+    fun latest(samples: List<Sample>, nowS: Long): Double? = meanEnding(segments(samples), nowS)
+
+    /** One decimal, or "-.-" while there is no average yet. */
+    fun text(avg: Double?): String = avg?.let { String.format(Locale.US, "%.1f", it) } ?: "-.-"
+
+    /**
+     * The mean over the [WINDOW_S] ending at [t], or null when the record does not
+     * reach back to the window's start or covers less than [MIN_COVER] of it.
+     */
+    private fun meanEnding(segs: List<Seg>, t: Long): Double? {
+        val start = segs.minOfOrNull { it.t.first() } ?: return null
+        val a = t - WINDOW_S
+        if (a < start) return null
+        val cover = segs.sumOf { it.cover(a, t) }
+        if (cover < MIN_COVER * WINDOW_S) return null
+        return segs.sumOf { it.area(t) - it.area(a) } / cover
     }
 
     /** One unbroken run of samples, with the running integral (°C·s) at each. */

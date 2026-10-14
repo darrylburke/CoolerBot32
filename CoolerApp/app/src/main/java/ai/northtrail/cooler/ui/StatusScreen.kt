@@ -33,6 +33,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -49,7 +52,19 @@ fun StatusScreen(ui: UiState, nowEpochS: Long, modifier: Modifier = Modifier) {
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
-            Text("${StatusText.temp(s?.temp)} °C", style = MaterialTheme.typography.displayLarge)
+            // Current / 1-hour rolling average (the right-hand end of the graph's
+            // average line); the average smaller, in the line's colour.
+            val avg = TrendAverage.text(TrendAverage.latest(ui.trend.samples(nowEpochS - TrendAverage.WINDOW_S), nowEpochS))
+            Text(
+                buildAnnotatedString {
+                    append(StatusText.temp(s?.temp))
+                    withStyle(SpanStyle(color = CoolerColors.Average, fontSize = MaterialTheme.typography.headlineMedium.fontSize)) {
+                        append(" / $avg")
+                    }
+                    append(" °C")
+                },
+                style = MaterialTheme.typography.displayLarge,
+            )
             Spacer(Modifier.weight(1f))
             Text(
                 s?.humidity?.let { "${it.roundToInt()} %RH" } ?: "-- %RH",
