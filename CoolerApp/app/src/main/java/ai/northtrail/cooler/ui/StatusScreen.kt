@@ -53,17 +53,17 @@ fun StatusScreen(ui: UiState, nowEpochS: Long, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.Bottom,
         ) {
             // Current / 1-hour rolling average (the right-hand end of the graph's
-            // average line); the average smaller, in the line's colour.
+            // average line), both full size; the average in the line's colour, and
+            // the unit smaller so the line still fits beside the humidity.
             val avg = TrendAverage.text(TrendAverage.latest(ui.trend, nowEpochS))
             Text(
                 buildAnnotatedString {
                     append(StatusText.temp(s?.temp))
-                    withStyle(SpanStyle(color = CoolerColors.Average, fontSize = MaterialTheme.typography.headlineMedium.fontSize)) {
-                        append(" / $avg")
-                    }
-                    append(" °C")
+                    withStyle(SpanStyle(color = CoolerColors.Average)) { append(" / $avg") }
+                    withStyle(SpanStyle(fontSize = MaterialTheme.typography.headlineMedium.fontSize)) { append(" °C") }
                 },
                 style = MaterialTheme.typography.displayLarge,
+                maxLines = 1,
             )
             Spacer(Modifier.weight(1f))
             Text(
