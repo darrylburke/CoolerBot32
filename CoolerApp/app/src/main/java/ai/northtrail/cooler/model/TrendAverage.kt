@@ -48,6 +48,13 @@ object TrendAverage {
      */
     fun latest(samples: List<Sample>, nowS: Long): Double? = meanEnding(segments(samples), nowS)
 
+    /**
+     * [latest] from the trend. The record has to reach back past the hour's start,
+     * so it is given two hours, not one: a last-hour slice starts at the first
+     * sample after the boundary and almost never qualifies.
+     */
+    fun latest(trend: TrendBuffer, nowS: Long): Double? = latest(trend.samples(nowS - 2 * WINDOW_S), nowS)
+
     /** One decimal, or "-.-" while there is no average yet. */
     fun text(avg: Double?): String = avg?.let { String.format(Locale.US, "%.1f", it) } ?: "-.-"
 

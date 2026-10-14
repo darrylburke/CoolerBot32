@@ -54,7 +54,7 @@ fun StatusScreen(ui: UiState, nowEpochS: Long, modifier: Modifier = Modifier) {
         ) {
             // Current / 1-hour rolling average (the right-hand end of the graph's
             // average line); the average smaller, in the line's colour.
-            val avg = TrendAverage.text(TrendAverage.latest(ui.trend.samples(nowEpochS - TrendAverage.WINDOW_S), nowEpochS))
+            val avg = TrendAverage.text(TrendAverage.latest(ui.trend, nowEpochS))
             Text(
                 buildAnnotatedString {
                     append(StatusText.temp(s?.temp))

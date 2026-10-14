@@ -80,4 +80,14 @@ class TrendAverageTest {
         assertEquals("4.0", TrendAverage.text(4.04))
         assertEquals("-.-", TrendAverage.text(null))
     }
+
+    @Test
+    fun readoutAverageComesFromTheWholeTrendNotALastHourSlice() {
+        // Two hours of minute samples; "now" 30 s after the last one, so no sample
+        // sits exactly an hour back -- a last-hour slice cannot reach its start.
+        var trend = TrendBuffer()
+        for (i in 0..120) trend = trend.appended(1_800_000_000L + i * 60, 4.0, false)
+        val now = 1_800_000_000L + 120 * 60 + 30
+        assertEquals(4.0, TrendAverage.latest(trend, now)!!, 1e-9)
+    }
 }
