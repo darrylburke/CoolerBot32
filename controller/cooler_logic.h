@@ -91,6 +91,24 @@ inline void clamp_settings(Settings& s) {
     s.sampleinterval = clampi(s.sampleinterval, 10, 3600);
 }
 
+// ---- dehumidifier AUTO want ---------------------------------------------------
+// Spec: docs/superpowers/specs/2026-10-28-dehumidifier-controller-design.md §2.2.
+// dehum_rh is persisted on its own, NOT in Settings: growing Settings would
+// change its stored size and reset the live tuned settings to defaults.
+constexpr int DEHUM_RH_BAND = 3;   // %RH: on at >= dehum_rh, off below dehum_rh - 3
+struct DehumCfg { int dehum_rh = 65; };   // %RH 30 .. 95
+inline int clamp_dehum_rh(int v) { return clampi(v, 30, 95); }
+
+struct DehumAuto { bool humid = false; };
+
+// want = AC resting (relay open) && humid. No valid RH clears the latch.
+inline bool dehum_want(DehumAuto& a, bool ac_relay, bool rh_valid, float rh, int dehum_rh) {
+    if (!rh_valid || std::isnan(rh)) a.humid = false;
+    else if (rh >= (float)dehum_rh) a.humid = true;
+    else if (rh < (float)(dehum_rh - DEHUM_RH_BAND)) a.humid = false;
+    return !ac_relay && a.humid;
+}
+
 // ---- fin thermistor calibration (spec §2.7), persisted by the YAML ---------
 struct FinCal {
     float beta = 3950.0f;

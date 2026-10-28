@@ -46,6 +46,9 @@ globals:
   # millis() of the SHT30's last delivered reading. sht3xd keeps the old value
   # when the sensor dies, so the logic needs the reading's AGE (review fix).
   - { id: g_sht_ms,  type: uint32_t,           restore_value: no, initial_value: '0' }
+  # Dehumidifier AUTO want last computed (-1 = not yet), and "send it now".
+  - { id: g_dehum_want, type: int, restore_value: no, initial_value: '-1' }
+  - { id: g_dehum_send, type: int, restore_value: no, initial_value: '0' }
 
 wifi:
   # The cooler's network first, then the bench network; ESPHome joins
@@ -150,6 +153,10 @@ mqtt:
             if (x["sampleinterval"].is<int>()) s.sampleinterval = x["sampleinterval"].as<int>();
             cooler::clamp_settings(s);
             cooler_glue::save_settings();
+            if (x["dehum_rh"].is<int>()) {
+              cooler_glue::dehumcfg().dehum_rh = cooler::clamp_dehum_rh(x["dehum_rh"].as<int>());
+              cooler_glue::save_dehumcfg();
+            }
 
             // Only 1 (start) and 0 (abort) mean anything; a start during a
             // run is ignored by cal_start() so collected points survive.
@@ -273,6 +280,13 @@ script:
           }
           if (o.publish_now) id(g_dirty) = 1;
 
+          // Dehumidifier AUTO: AC resting and box humid (spec 2026-10-28 §2.2).
+          const float rh = id(sht30h).state;
+          const int want = cooler::dehum_want(cooler_glue::dehumauto(), o.relay,
+                                              o.box_valid && !std::isnan(rh), rh,
+                                              cooler_glue::dehumcfg().dehum_rh) ? 1 : 0;
+          if (want != id(g_dehum_want)) { id(g_dehum_want) = want; id(g_dehum_send) = 1; id(g_dirty) = 1; }
+
   - id: publish_state
     mode: single
     then:
@@ -317,6 +331,8 @@ script:
             root["fin_cutoff"]     = s.fin_cutoff;
             root["fin_recover"]    = s.fin_recover;
             root["settle"]         = s.settle;
+            root["dehum_rh"]       = cooler_glue::dehumcfg().dehum_rh;
+            root["dehum_want"]     = id(g_dehum_want) < 0 ? 0 : id(g_dehum_want);
 
             const cooler::FinCal &c = cooler_glue::fincal();
             root["fin_cal"]  = c.calibrated ? 1 : 0;
@@ -338,6 +354,18 @@ script:
             // (NaN until its first update: fall back to millis() for that.)
             root["uptime_s"] = std::isnan(id(uptime_s).state) ? (uint32_t)(millis() / 1000)
                                                                : (uint32_t) id(uptime_s).state;
+
+  # Dehumidifier AUTO want: on change and every 30 s, never retained, QoS 0.
+  # The dehumidifier treats a want older than 90 s as want 0.
+  - id: send_dehum_want
+    mode: single
+    then:
+      - lambda: 'id(g_dehum_send) = 0;'
+      - mqtt.publish:
+          topic: "dehum/want"
+          qos: 0
+          retain: false
+          payload: !lambda 'return id(g_dehum_want) == 1 ? std::string("{\"want\":1}") : std::string("{\"want\":0}");'
 
 interval:
   # 1 s control tick + history sampling
@@ -367,6 +395,11 @@ interval:
             lambda: 'return id(g_dirty) != 0 && id(mqtt_client).is_connected();'
           then:
             - script.execute: publish_state
+      - if:
+          condition:
+            lambda: 'return id(g_dehum_send) != 0 && id(g_dehum_want) >= 0 && id(mqtt_client).is_connected();'
+          then:
+            - script.execute: send_dehum_want
 
   # status every 30 s regardless of change
   - interval: 30s
@@ -376,6 +409,11 @@ interval:
             lambda: 'return id(mqtt_client).is_connected();'
           then:
             - script.execute: publish_state
+      - if:
+          condition:
+            lambda: 'return id(g_dehum_want) >= 0 && id(mqtt_client).is_connected();'
+          then:
+            - script.execute: send_dehum_want
 
   # status LED: 125 ms phase clock gives 1 Hz and 4 Hz blinks
   - interval: 125ms

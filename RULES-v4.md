@@ -91,6 +91,10 @@ stays above `fin_cutoff`, and defrost breaks start by themselves as the box gets
 | `maxrun` | min | 1 .. 60 | 10 |
 | `dutypercent` | % | 1 .. 100 | 50 |
 | `sampleinterval` | s | 10 .. 3600 | 3600 |
+| `dehum_rh` | %RH | 30 .. 95 | 65 |
+
+`dehum_rh` is the dehumidifier's AUTO threshold (see below); it is stored
+separately from the other settings.
 
 Actions: `{"calibrate":1}` / `{"calibrate":0}`, `{"fincal_reset":1}`,
 `{"clearhist":1}`. Non-integer values are ignored.
@@ -107,9 +111,17 @@ is also published as `cooler/binary_sensor/override_switch/state` (ON/OFF).
 
 | Login | Used by | Broker ACL |
 |---|---|---|
-| controller login (`mqtt_username`) | the controller | read/write `cooler/#` |
+| controller login (`mqtt_username`) | the controller | read/write `cooler/#`; write `dehum/want` |
 | panel login (`panel_mqtt_username`) | the LCD panel (CoolerPanel) | read `cooler/data`, `cooler/availability`; write `cooler/cmd` |
 | app login (`app_mqtt_username`) | the Android app (CoolerApp) | same as the panel's |
+
+**Dehumidifier (AUTO).** Every tick the controller works out `dehum_want` =
+relay open (AC resting, defrost included) **and** box RH humid: humid turns on
+at RH ≥ `dehum_rh` and off below `dehum_rh − 3`; no valid RH reading means not
+humid. It publishes `{"want":0|1}` to `dehum/want` (not retained, QoS 0) on any
+change and every 30 s, so the controller login also needs write on
+`dehum/want`. `cooler/data` carries `dehum_rh` and `dehum_want`. The
+dehumidifier side is in [RULES-dehum.md](RULES-dehum.md).
 
 Passwords live only in the git-ignored `controller/secrets.yaml` (keys listed in `secrets.yaml.example`). Field list: spec §3.1.
 
