@@ -22,8 +22,8 @@ anything.
 ### Goals
 
 1. Dehumidifier modes: **AUTO, ON, OFF, TIMER, CYCLE** (§2.1).
-2. In AUTO the Cooler decides: on while the AC is resting **and** box RH is at
-   or above a new Cooler setting `dehum_rh`; off otherwise.
+2. AUTO: on while the Cooler reports the AC resting **and** the dehumidifier's
+   own SHT30 reads RH at or above `dehum_rh`; off otherwise.
 3. A dehumidifier min run time, settable over MQTT (and on the LCD later).
 4. Safe failure: lost broker means the dehumidifier is off.
 5. The MQTT contract is complete enough that the LCD round needs no further
@@ -63,7 +63,8 @@ anything.
   board's module: if it is a WROVER (has PSRAM), GPIO16 is taken by PSRAM
   and the relay must move to another safe pin. Report that back to the user
   rather than choosing a pin silently.
-- No sensors, switches or LED are required. (Optional: drive the board's
+- SHT30 (the v1 board's own) on the board's SDA/SCL (GPIO21/GPIO22), I²C 0x44, 10 kHz as on the Cooler.
+- No switches or LED are required. (Optional: drive the board's
   status LED if it has a free one; builder's call.)
 
 ## 2. Behaviour
@@ -89,23 +90,25 @@ The dehumidifier controller owns the mode and stores it across reboots.
 - The TIMER countdown and CYCLE phase reset whenever the mode command is
   received again (sending TIMER while in TIMER restarts it with the new hours).
 
-### 2.2 AUTO (computed by the Cooler)
+### 2.2 AUTO (revised 2026-10-28: humidity is measured locally)
 
-The Cooler computes `dehum_want` every control tick:
+The user reconnected the v1 board's own SHT30, so the humidity half of the
+AUTO decision moved to the dehumidifier. The Cooler only reports whether the
+AC is resting.
 
-- **AC resting** = the Cooler's relay is open (`relay == 0`). Defrost counts
-  as resting. It uses the relay rather than the inferred compressor so that
-  the dehumidifier stops as soon as the AC is told to cool.
-- **Humid** = a fresh SHT30 RH reading with hysteresis: becomes true at
-  RH ≥ `dehum_rh`, false at RH < `dehum_rh − 3`. (3 % band is the designer's
-  call, a fixed constant.)
-- `dehum_want = AC resting && humid`. No valid RH (SHT30 fault or stale) ⇒
-  false.
+- **AC resting** (Cooler) = the Cooler's relay is open (`relay == 0`). Defrost
+  counts as resting. It uses the relay rather than the inferred compressor so
+  that the dehumidifier stops as soon as the AC is told to cool. The Cooler
+  sends `want = 1` while resting, `0` while cooling.
+- **Humid** (dehumidifier) = a fresh reading from the dehumidifier's own SHT30
+  with hysteresis: becomes true at RH ≥ `dehum_rh`, false at RH <
+  `dehum_rh − 3`. No reading for 30 s (sensor fault, unplugged) ⇒ not humid.
+- AUTO relay = fresh `want == 1` **and** humid. When the Cooler is silent,
+  AUTO is off (no humidistat fallback: the user chose AUTO-only).
 
 The Cooler publishes `{"want":0|1}` to **`dehum/want`**, **not retained**, QoS 0,
-whenever `dehum_want` changes and every 30 s regardless, and only while
-connected. The flag is also included in `cooler/data` as `dehum_want` so
-status screens can see why.
+whenever it changes and every 30 s regardless, and only while connected.
+`cooler/data` carries it as `dehum_want`.
 
 On the dehumidifier side, AUTO relay = the last received `want`, **but only
 if a `want` arrived within the last 90 s**; otherwise AUTO treats `want` as 0.
@@ -165,25 +168,15 @@ must stay open indefinitely.
 | `timer_h` | h | 1 .. 24 | 2 |
 | `cycle_on` | min | max(1, `min_run`) .. 240 | 30 |
 | `cycle_off` | min | 1 .. 240 | 30 |
+| `dehum_rh` | %RH | 30 .. 95 | 65 (AUTO humidity threshold, local SHT30) |
 
 Defaults and bounds are the designer's call. Non-integer values are ignored,
 as on the Cooler.
 
-### 3.2 Cooler (`cooler/cmd`, persisted, clamped)
+### 3.2 Cooler
 
-| Key | Unit | Bounds | Default |
-|---|---|---|---|
-| `dehum_rh` | %RH | 30 .. 95 | 65 |
-
-Added to `cooler::Settings`, `clamp_settings`, the YAML's `/cmd` handler, the
-persistence in `cooler_esphome.h`, `cooler/data`, and `RULES-v4.md`.
-
-**Must not reset the live Cooler's tuned settings.** Growing `Settings`
-changes its stored size, and `cooler_esphome.h` treats a size change as "use
-defaults", which would wipe the tuned `minofftime`, `minruntime`,
-`fin_cutoff` etc. on the first flash. Store `dehum_rh` in its own preference,
-or migrate the old record. Verify on the bench that a v4 board keeps its
-settings across the upgrade.
+No new Cooler settings (the first draft's Cooler-side `dehum_rh` moved to the
+dehumidifier). The Cooler's `Settings` record is untouched.
 
 ## 4. MQTT contract
 
@@ -225,6 +218,8 @@ ignored.
   "hold_s": 412,             // seconds of min run time left, 0 if none
   "remain_s": 1200,          // TIMER: seconds left; CYCLE: seconds left in this phase; else 0
   "phase": "on",             // CYCLE only: on | off; null otherwise
+  "temp": 4.1, "humidity": 71.0,   // local SHT30, null if stale
+  "humid": 1, "dehum_rh": 65,
   "min_run": 10, "timer_h": 2, "cycle_on": 30, "cycle_off": 30,
   "run_s": 412,              // seconds in the current relay state
   "uptime_s": 86400
@@ -237,7 +232,7 @@ ignored.
 
 ### 4.4 Cooler additions
 
-- `cooler/data` gains `dehum_rh` and `dehum_want`.
+- `cooler/data` gains `dehum_want`.
 - The Cooler publishes `{"want":…}` to `dehum/want` (§2.2).
 
 ### 4.5 Broker logins and ACL (host `champion`, `/etc/mosquitto/acl`)
@@ -271,8 +266,8 @@ Mirror the Cooler's split:
   simpler (builder's call; it must stay git-ignored).
 - `RULES-dehum.md` at the repo root: hardware, modes, settings, MQTT, install
   checklist, in the style of `RULES-v4.md`.
-- Cooler: `dehum_rh`, hysteresis and `dehum_want` go in `cooler_logic.h`
-  (tested in `controller/tests`); the publish to `dehum/want` goes in the YAML.
+- Cooler: `dehum_want` = relay open, computed and published in the YAML
+  (`dehum/want`); no Cooler logic or settings change.
 
 ## 6. Testing and verification
 
@@ -280,10 +275,11 @@ Host tests (dehumidifier) must cover at least: each mode's relay result;
 TIMER expiry → AUTO; CYCLE phases and restart on re-send; `min_run` holding
 the relay on through `want` 1→0 and ending on time; OFF and broker-loss
 cutting through `min_run`; the 60 s broker grace and recovery; `want`
-expiry after 90 s; `cycle_on` ≥ `min_run` clamping; settings clamping.
+expiry after 90 s; `cycle_on` ≥ `min_run` clamping; settings clamping;
+AUTO needs local humid; RH hysteresis; stale/absent RH blocks AUTO; ON /
+TIMER / CYCLE ignore RH.
 
-Host tests (Cooler): `dehum_want` truth table, RH hysteresis, no RH ⇒ 0,
-`dehum_rh` clamping/persistence. Existing Cooler tests must keep passing.
+Cooler: existing tests must keep passing; firmware must compile.
 
 Bench, before mains (relay driving a lamp or meter only):
 
