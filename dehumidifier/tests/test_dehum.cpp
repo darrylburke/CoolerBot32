@@ -260,3 +260,24 @@ TEST_CASE("publish_now on changes") {
     CHECK(r.cmd(mode_cmd(Mode::Cycle)).publish_now);  // mode changed, relay stays on
     CHECK_FALSE(r.tick().publish_now);
 }
+
+TEST_CASE("broker loss forgets the last want") {
+    Rig r;                                            // AUTO, min_run 10
+    on_want(r.st, true);
+    REQUIRE(r.tick().relay);
+    r.run(15 * 60 * 1000);                            // past min_run (want goes stale, relay off)
+    on_want(r.st, true);
+    REQUIRE(r.tick().relay);
+    r.run(10 * 60 * 1000);                            // hold over; keep want fresh below
+    on_want(r.st, true);
+    REQUIRE(r.tick().relay);
+    r.in.mqtt_connected = false;
+    r.run(75 * 1000);                                 // lockout at 60 s
+    CHECK_FALSE(r.o.relay);
+    r.in.mqtt_connected = true;
+    r.tick();                                         // want is 76 s old but predates the outage
+    CHECK_FALSE(r.o.relay);
+    CHECK(r.o.want == -1);
+    on_want(r.st, true);                              // the Cooler's next message
+    CHECK(r.tick().relay);
+}

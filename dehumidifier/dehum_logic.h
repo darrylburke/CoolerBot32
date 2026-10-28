@@ -136,7 +136,9 @@ inline Outputs step(const Inputs& in, Settings& s, State& st, uint32_t now) {
         st.link_lost = false;
     } else if (st.ever_connected) {
         sat_add(st.disc_ms, dt);
-        if (st.disc_ms >= LINK_LOST_MS) st.link_lost = true;
+        // A want from before the outage must not restart AUTO on reconnect:
+        // forget it, and wait for the Cooler's next message (<= 30 s).
+        if (st.disc_ms >= LINK_LOST_MS) { st.link_lost = true; st.has_want = false; }
     }
     // TIMER/CYCLE count from the first connect, and keep counting through a broker loss.
     if (st.ever_connected && !restarted) sat_add(st.mode_ms, dt);
