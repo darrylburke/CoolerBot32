@@ -1,6 +1,7 @@
 #include "doctest/doctest.h"
 #include "dehum_logic.h"
 
+#include <cmath>
 #include <cstring>
 
 using namespace dehum;
@@ -18,6 +19,8 @@ struct Rig {
     explicit Rig(Settings s0 = Settings{}, bool connected = true, uint32_t start = 1000)
         : s(s0), now(start) {
         in.mqtt_connected = connected;
+        in.rh = 70.0f;        // humid unless a test says otherwise
+        in.rh_age_ms = 0;
         o = step(in, s, st, now);
     }
     Outputs tick(uint32_t ms = 1000) { now += ms; o = step(in, s, st, now); return o; }
@@ -37,6 +40,7 @@ TEST_CASE("clamp_settings bounds") {
     struct B { int Settings::*f; int lo, hi; };
     const B bounds[] = {
         {&Settings::min_run, 0, 60}, {&Settings::timer_h, 1, 24}, {&Settings::cycle_off, 1, 240},
+        {&Settings::dehum_rh, 30, 95},
     };
     for (auto b : bounds) {
         Settings s; s.*b.f = b.lo - 1; clamp_settings(s); CHECK(s.*b.f == b.lo);
@@ -280,4 +284,61 @@ TEST_CASE("broker loss forgets the last want") {
     CHECK(r.o.want == -1);
     on_want(r.st, true);                              // the Cooler's next message
     CHECK(r.tick().relay);
+}
+
+TEST_CASE("dehum_rh default") { CHECK(Settings{}.dehum_rh == 65); }
+
+TEST_CASE("auto needs local humidity") {
+    Settings s; s.min_run = 0;
+    Rig r(s);
+    r.in.rh = 60.0f;
+    on_want(r.st, true);
+    r.tick();
+    CHECK_FALSE(r.o.relay);
+    CHECK_FALSE(r.o.humid);
+    r.in.rh = 66.0f;
+    r.tick();
+    CHECK(r.o.relay);
+    CHECK(r.o.humid);
+    on_want(r.st, false);                              // AC cooling
+    CHECK_FALSE(r.tick().relay);
+    CHECK(r.o.humid);
+}
+
+TEST_CASE("local rh hysteresis") {
+    Settings s; s.min_run = 0;
+    Rig r(s);
+    r.in.rh = 50.0f;                                   // start dry: the rig boots at 70 %
+    r.tick();
+    auto at = [&](float rh) { r.in.rh = rh; on_want(r.st, true); return r.tick().relay; };
+    CHECK_FALSE(at(64.9f));
+    CHECK(at(65.0f));
+    CHECK(at(62.1f));
+    CHECK_FALSE(at(61.9f));
+    CHECK_FALSE(at(64.0f));
+}
+
+TEST_CASE("stale or missing rh blocks auto") {
+    Settings s; s.min_run = 0;
+    Rig r(s);
+    on_want(r.st, true);
+    REQUIRE(r.tick().relay);
+    r.in.rh_age_ms = 29000;
+    CHECK(r.tick().relay);
+    r.in.rh_age_ms = 30000;
+    CHECK_FALSE(r.tick().relay);
+    CHECK_FALSE(r.o.humid);
+    r.in.rh_age_ms = 0;
+    r.in.rh = NAN;
+    CHECK_FALSE(r.tick().relay);
+    r.in.rh = 63.0f;                                   // latch was cleared: 63 is not humid
+    CHECK_FALSE(r.tick().relay);
+}
+
+TEST_CASE("on, timer and cycle ignore rh") {
+    Rig r;
+    r.in.rh = NAN;
+    CHECK(r.cmd(mode_cmd(Mode::On)).relay);
+    CHECK(r.cmd(mode_cmd(Mode::Timer)).relay);
+    CHECK(r.cmd(mode_cmd(Mode::Cycle)).relay);
 }

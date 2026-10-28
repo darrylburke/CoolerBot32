@@ -6,6 +6,7 @@
 //
 // Spec: docs/superpowers/specs/2026-10-28-dehumidifier-controller-design.md
 #pragma once
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <optional>
@@ -14,6 +15,8 @@ namespace dehum {
 
 constexpr uint32_t LINK_LOST_MS = 60000;   // broker gone this long -> relay off (spec 2.4)
 constexpr uint32_t WANT_FRESH_MS = 90000;  // a Cooler want older than this is no want (spec 2.2)
+constexpr uint32_t RH_STALE_MS = 30000;    // a local humidity sensor reading older than this is no reading
+constexpr int RH_BAND = 3;                 // %RH: humid at >= dehum_rh, not below dehum_rh - 3
 
 enum class Mode : uint8_t { Auto, On, Off, Timer, Cycle };
 
@@ -40,6 +43,7 @@ struct Settings {
     int timer_h = 2;     // h    1 .. 24
     int cycle_on = 30;   // min  max(1, min_run) .. 240
     int cycle_off = 30;  // min  1 .. 240
+    int dehum_rh = 65;   // %RH 30 .. 95, AUTO threshold on the local humidity sensor
     Mode mode = Mode::Auto;
 };
 
@@ -51,6 +55,7 @@ inline void clamp_settings(Settings& s) {
     s.timer_h = clampi(s.timer_h, 1, 24);
     s.cycle_on = clampi(s.cycle_on, s.min_run > 1 ? s.min_run : 1, 240);
     s.cycle_off = clampi(s.cycle_off, 1, 240);
+    s.dehum_rh = clampi(s.dehum_rh, 30, 95);
     if ((uint8_t)s.mode > (uint8_t)Mode::Cycle) s.mode = Mode::Auto;
 }
 
@@ -69,6 +74,8 @@ struct State {
     uint32_t mode_ms = 0;          // TIMER: elapsed; CYCLE: elapsed in this phase
     bool cycle_on_phase = true;
 
+    bool humid = false;            // local RH latch (hysteresis)
+
     bool relay = false;
     uint32_t relay_age_ms = 0;     // time in the current relay state
 
@@ -77,11 +84,15 @@ struct State {
 };
 
 struct Cmd {
-    std::optional<int> min_run, timer_h, cycle_on, cycle_off;
+    std::optional<int> min_run, timer_h, cycle_on, cycle_off, dehum_rh;
     std::optional<Mode> mode;
 };
 
-struct Inputs { bool mqtt_connected = false; };
+struct Inputs {
+    bool mqtt_connected = false;
+    float rh = NAN;              // local humidity sensor humidity, NAN if none
+    uint32_t rh_age_ms = UINT32_MAX; // ms since the humidity sensor last delivered a reading
+};
 
 struct Outputs {
     bool relay = false;
@@ -91,6 +102,8 @@ struct Outputs {
     uint32_t hold_s = 0;           // min_run seconds left while relay on, else 0
     uint32_t remain_s = 0;         // TIMER: left; CYCLE: left in phase; else 0
     int phase = -1;                // CYCLE: 1 on / 0 off; else -1
+    bool rh_valid = false;         // fresh local reading
+    bool humid = false;            // local RH at/above dehum_rh (with hysteresis)
     uint32_t run_s = 0;            // seconds in current relay state
     bool settings_changed = false; // TIMER expired -> mode became Auto; caller saves
     bool publish_now = false;      // a published field other than the *_s counters changed
@@ -109,12 +122,13 @@ inline bool apply_cmd(const Cmd& c, Settings& s, State& st) {
     if (c.timer_h) s.timer_h = *c.timer_h;
     if (c.cycle_on) s.cycle_on = *c.cycle_on;
     if (c.cycle_off) s.cycle_off = *c.cycle_off;
+    if (c.dehum_rh) s.dehum_rh = *c.dehum_rh;
     if (c.mode) s.mode = *c.mode;
     clamp_settings(s);
     if (c.mode) restart_mode_timers(st);
     return s.min_run != before.min_run || s.timer_h != before.timer_h ||
            s.cycle_on != before.cycle_on || s.cycle_off != before.cycle_off ||
-           s.mode != before.mode;
+           s.dehum_rh != before.dehum_rh || s.mode != before.mode;
 }
 
 inline void on_want(State& st, bool want) { st.has_want = true; st.want = want; st.want_age_ms = 0; }
@@ -144,6 +158,12 @@ inline Outputs step(const Inputs& in, Settings& s, State& st, uint32_t now) {
     if (st.ever_connected && !restarted) sat_add(st.mode_ms, dt);
 
     const bool want_fresh = st.has_want && st.want_age_ms < WANT_FRESH_MS;
+
+    o.rh_valid = !std::isnan(in.rh) && in.rh_age_ms < RH_STALE_MS;
+    if (!o.rh_valid) st.humid = false;
+    else if (in.rh >= (float)s.dehum_rh) st.humid = true;
+    else if (in.rh < (float)(s.dehum_rh - RH_BAND)) st.humid = false;
+    o.humid = st.humid;
     o.want = want_fresh ? (st.want ? 1 : 0) : -1;
 
     if (s.mode == Mode::Timer) {
@@ -163,7 +183,7 @@ inline Outputs step(const Inputs& in, Settings& s, State& st, uint32_t now) {
 
     bool desired = false;
     switch (s.mode) {
-        case Mode::Auto: desired = want_fresh && st.want; break;
+        case Mode::Auto: desired = want_fresh && st.want && st.humid; break;
         case Mode::On: case Mode::Timer: desired = true; break;
         case Mode::Cycle: desired = st.cycle_on_phase; break;
         default: desired = false; break;
@@ -183,7 +203,8 @@ inline Outputs step(const Inputs& in, Settings& s, State& st, uint32_t now) {
     o.run_s = st.relay_age_ms / 1000;
 
     const uint32_t sig = (o.relay ? 1u : 0u) | ((uint32_t)o.mode << 1) | ((uint32_t)(o.want + 1) << 4) |
-                         ((o.link_lost ? 1u : 0u) << 6) | ((uint32_t)(o.phase + 1) << 7);
+                         ((o.link_lost ? 1u : 0u) << 6) | ((uint32_t)(o.phase + 1) << 7) |
+                         ((o.humid ? 1u : 0u) << 9) | ((o.rh_valid ? 1u : 0u) << 10);
     o.publish_now = !st.sig_init || sig != st.sig;
     st.sig_init = true;
     st.sig = sig;

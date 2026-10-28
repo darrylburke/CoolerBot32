@@ -23,7 +23,7 @@ anything.
 
 1. Dehumidifier modes: **AUTO, ON, OFF, TIMER, CYCLE** (§2.1).
 2. AUTO: on while the Cooler reports the AC resting **and** the dehumidifier's
-   own SHT30 reads RH at or above `dehum_rh`; off otherwise.
+   own humidity sensor reads RH at or above `dehum_rh`; off otherwise.
 3. A dehumidifier min run time, settable over MQTT (and on the LCD later).
 4. Safe failure: lost broker means the dehumidifier is off.
 5. The MQTT contract is complete enough that the LCD round needs no further
@@ -63,7 +63,7 @@ anything.
   board's module: if it is a WROVER (has PSRAM), GPIO16 is taken by PSRAM
   and the relay must move to another safe pin. Report that back to the user
   rather than choosing a pin silently.
-- SHT30 (the v1 board's own) on the board's SDA/SCL (GPIO21/GPIO22), I²C 0x44, 10 kHz as on the Cooler.
+- HDC1080 humidity sensor (the v1 board's own) on the board's SDA/SCL (GPIO21/GPIO22), I²C 0x40, 10 kHz. (The old v1 config named an SHT30 at 0x44; the fitted board is an HDC1080.)
 - No switches or LED are required. (Optional: drive the board's
   status LED if it has a free one; builder's call.)
 
@@ -92,7 +92,7 @@ The dehumidifier controller owns the mode and stores it across reboots.
 
 ### 2.2 AUTO (revised 2026-10-28: humidity is measured locally)
 
-The user reconnected the v1 board's own SHT30, so the humidity half of the
+The user reconnected the v1 board's own humidity sensor (HDC1080), so the humidity half of the
 AUTO decision moved to the dehumidifier. The Cooler only reports whether the
 AC is resting.
 
@@ -100,7 +100,7 @@ AC is resting.
   counts as resting. It uses the relay rather than the inferred compressor so
   that the dehumidifier stops as soon as the AC is told to cool. The Cooler
   sends `want = 1` while resting, `0` while cooling.
-- **Humid** (dehumidifier) = a fresh reading from the dehumidifier's own SHT30
+- **Humid** (dehumidifier) = a fresh reading from the dehumidifier's own HDC1080
   with hysteresis: becomes true at RH ≥ `dehum_rh`, false at RH <
   `dehum_rh − 3`. No reading for 30 s (sensor fault, unplugged) ⇒ not humid.
 - AUTO relay = fresh `want == 1` **and** humid. When the Cooler is silent,
@@ -168,7 +168,7 @@ must stay open indefinitely.
 | `timer_h` | h | 1 .. 24 | 2 |
 | `cycle_on` | min | max(1, `min_run`) .. 240 | 30 |
 | `cycle_off` | min | 1 .. 240 | 30 |
-| `dehum_rh` | %RH | 30 .. 95 | 65 (AUTO humidity threshold, local SHT30) |
+| `dehum_rh` | %RH | 30 .. 95 | 65 (AUTO humidity threshold, local HDC1080) |
 
 Defaults and bounds are the designer's call. Non-integer values are ignored,
 as on the Cooler.
@@ -218,7 +218,7 @@ ignored.
   "hold_s": 412,             // seconds of min run time left, 0 if none
   "remain_s": 1200,          // TIMER: seconds left; CYCLE: seconds left in this phase; else 0
   "phase": "on",             // CYCLE only: on | off; null otherwise
-  "temp": 4.1, "humidity": 71.0,   // local SHT30, null if stale
+  "temp": 4.1, "humidity": 71.0,   // local HDC1080, null if stale
   "humid": 1, "dehum_rh": 65,
   "min_run": 10, "timer_h": 2, "cycle_on": 30, "cycle_off": 30,
   "run_s": 412,              // seconds in the current relay state

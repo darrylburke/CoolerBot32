@@ -27,6 +27,10 @@ esp32:
 
 globals:
   - { id: g_dirty, type: int, restore_value: no, initial_value: '1' }
+  # millis() of the HDC1080's last reading: the sensor keeps the old value when
+  # the chip stops answering, so the logic needs the reading's age.
+  - { id: g_rh_ms, type: uint32_t, restore_value: no, initial_value: '0' }
+  - { id: g_rh_seen, type: bool, restore_value: no, initial_value: 'false' }
 
 wifi:
   networks:
@@ -119,6 +123,7 @@ mqtt:
             if (x["timer_h"].is<int>())   c.timer_h   = x["timer_h"].as<int>();
             if (x["cycle_on"].is<int>())  c.cycle_on  = x["cycle_on"].as<int>();
             if (x["cycle_off"].is<int>()) c.cycle_off = x["cycle_off"].as<int>();
+            if (x["dehum_rh"].is<int>())  c.dehum_rh  = x["dehum_rh"].as<int>();
             if (x["mode"].is<const char *>()) c.mode = dehum::parse_mode(x["mode"].as<const char *>());
             if (dehum::apply_cmd(c, dehum_glue::settings(), dehum_glue::state()))
               dehum_glue::save_settings();
@@ -153,7 +158,27 @@ switch:
     pin: { number: GPIO23, inverted: true }
     restore_mode: ALWAYS_OFF
 
+i2c:
+  # The v1 board's humidity sensor on the DevKitC's SDA/SCL. It answers at 0x40
+  # (an HDC1080; the htu21d driver gets no answer from it). 10 kHz for the cable.
+  sda: GPIO21
+  scl: GPIO22
+  scan: true
+  frequency: 10khz
+
 sensor:
+  - platform: hdc1080
+    address: 0x40
+    update_interval: 10s
+    temperature:
+      id: rh_temp
+      internal: true
+      on_value:
+        - lambda: 'id(g_rh_ms) = millis(); id(g_rh_seen) = true;'
+    humidity:
+      id: rh_hum
+      internal: true
+
   - platform: uptime
     id: uptime_s
     internal: true
@@ -167,6 +192,8 @@ script:
       - lambda: |-
           dehum::Inputs in;
           in.mqtt_connected = id(mqtt_client).is_connected();
+          in.rh = id(rh_hum).state;
+          in.rh_age_ms = id(g_rh_seen) ? millis() - id(g_rh_ms) : UINT32_MAX;
           dehum::Outputs o = dehum::step(in, dehum_glue::settings(), dehum_glue::state(), millis());
           dehum_glue::out() = o;
           if (o.relay != id(relay).state) {
@@ -193,6 +220,11 @@ script:
             root["hold_s"] = o.hold_s;
             root["remain_s"] = o.remain_s;
             if (o.phase < 0) root["phase"] = nullptr; else root["phase"] = o.phase ? "on" : "off";
+            // A stale reading is not a reading: publish null.
+            if (o.rh_valid && !std::isnan(id(rh_temp).state)) root["temp"] = id(rh_temp).state; else root["temp"] = nullptr;
+            if (o.rh_valid) root["humidity"] = id(rh_hum).state; else root["humidity"] = nullptr;
+            root["humid"] = o.humid ? 1 : 0;
+            root["dehum_rh"] = s.dehum_rh;
             root["min_run"] = s.min_run;
             root["timer_h"] = s.timer_h;
             root["cycle_on"] = s.cycle_on;
