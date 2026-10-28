@@ -153,10 +153,6 @@ mqtt:
             if (x["sampleinterval"].is<int>()) s.sampleinterval = x["sampleinterval"].as<int>();
             cooler::clamp_settings(s);
             cooler_glue::save_settings();
-            if (x["dehum_rh"].is<int>()) {
-              cooler_glue::dehumcfg().dehum_rh = cooler::clamp_dehum_rh(x["dehum_rh"].as<int>());
-              cooler_glue::save_dehumcfg();
-            }
 
             // Only 1 (start) and 0 (abort) mean anything; a start during a
             // run is ignored by cal_start() so collected points survive.
@@ -280,11 +276,9 @@ script:
           }
           if (o.publish_now) id(g_dirty) = 1;
 
-          // Dehumidifier AUTO: AC resting and box humid (spec 2026-10-28 §2.2).
-          const float rh = id(sht30h).state;
-          const int want = cooler::dehum_want(cooler_glue::dehumauto(), o.relay,
-                                              o.box_valid && !std::isnan(rh), rh,
-                                              cooler_glue::dehumcfg().dehum_rh) ? 1 : 0;
+          // Dehumidifier AUTO want = AC resting (relay open). The dehumidifier
+          // checks its own humidity sensor (spec 2026-10-28 §2.2).
+          const int want = o.relay ? 0 : 1;
           if (want != id(g_dehum_want)) { id(g_dehum_want) = want; id(g_dehum_send) = 1; id(g_dirty) = 1; }
 
   - id: publish_state
@@ -331,7 +325,6 @@ script:
             root["fin_cutoff"]     = s.fin_cutoff;
             root["fin_recover"]    = s.fin_recover;
             root["settle"]         = s.settle;
-            root["dehum_rh"]       = cooler_glue::dehumcfg().dehum_rh;
             root["dehum_want"]     = id(g_dehum_want) < 0 ? 0 : id(g_dehum_want);
 
             const cooler::FinCal &c = cooler_glue::fincal();

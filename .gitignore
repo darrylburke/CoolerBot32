@@ -22,3 +22,5 @@ secrets.yaml
 .superpowers/
 /dehumidifier/build/
 /dehumidifier/*.log
+/controller/tests/build/
+/dehumidifier/tests/build/
