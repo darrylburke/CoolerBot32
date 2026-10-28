@@ -20,3 +20,5 @@ secrets.yaml
 
 # Agent workspaces
 .superpowers/
+/dehumidifier/build/
+/dehumidifier/*.log
