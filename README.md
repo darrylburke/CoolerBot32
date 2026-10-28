@@ -142,10 +142,13 @@ Folders in this repository:
 ```
 controller/        ESPHome firmware: cooler-v4.yaml, cooler_logic.h, cooler_esphome.h,
                    relay-test.yaml, i2c-diag.yaml, secrets.yaml.example, tests/ (host tests)
+dehumidifier/      dehumidifier relay firmware (v1 board): dehum-v1.yaml, dehum_logic.h, tests/
+                   -- rules in RULES-dehum.md
 V4_Wiring/         wiring page (index.html), PDF export, photos/
 docs/screenshots/  panel and app screenshots (sample data)
 docs/superpowers/  design specs and implementation plans (dated, historical)
 RULES-v4.md        current rules, hardware, settings, install checklist
+RULES-dehum.md     dehumidifier modes, settings, MQTT, install checklist
 RULES.md           legacy v3 dual-AC rules
 fridigaire.md      original design conversation
 CoolerPanel/       ESP32-S3 wall LCD firmware and desktop simulator
