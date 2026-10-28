@@ -30,6 +30,12 @@ inline void load() {
     settings_pref().save(&settings());
 }
 
-inline void save_settings() { settings_pref().save(&settings()); }
+// Written through at once: ESPHome otherwise batches flash writes (60 s), and a
+// reboot inside that window would bring back the previous mode. Settings only
+// change on user commands and TIMER expiry, so flash wear is negligible.
+inline void save_settings() {
+    settings_pref().save(&settings());
+    esphome::global_preferences->sync();
+}
 
 }  // namespace dehum_glue
