@@ -16,6 +16,7 @@ import ai.northtrail.cooler.model.PendingCommands
 import ai.northtrail.cooler.model.Publish
 import ai.northtrail.cooler.model.Topics
 import ai.northtrail.cooler.model.TrendBuffer
+import ai.northtrail.cooler.model.Widget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -107,6 +108,16 @@ class CoolerController(
         if (!s.health.controlsEnabled || Bounds.find(key) == null) return
         val next = Bounds.clamp(key, value, s.settingValue("fin_cutoff") ?: 0)
         if (next != s.settingValue(key)) edit(key, next)
+    }
+
+    /** A typed value: sent as is (no step grid), or refused (false) when outside the live range. */
+    fun enterSetting(key: String, value: Int): Boolean {
+        val s = state.value
+        val bound = Bounds.find(key) ?: return false
+        if (!s.health.controlsEnabled || bound.widget != Widget.STEPPER) return false
+        if (value !in Bounds.floor(key, s.settingValue("fin_cutoff") ?: 0)..bound.hi) return false
+        edit(key, value)
+        return true
     }
 
     fun startCalibration() = act(commands.calibrate(start = true))

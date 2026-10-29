@@ -325,4 +325,39 @@ class CoolerControllerTest {
         assertTrue(c.ui.value.trend.all.isEmpty())
         assertEquals(listOf("ignored cooler/history: not cooler/history v1"), ignored)
     }
+
+    @Test
+    fun enterSettingSendsATypedValueOffTheStepGrid() = runTest {
+        val c = controller()
+        online()
+        assertTrue(c.enterSetting("minruntime", 45))
+        advanceTimeBy(CoolerController.DEBOUNCE_MS + 1)
+        runCurrent()
+        assertEquals(cmd("""{"minruntime":45}"""), transport.published.last())
+        assertTrue(c.ui.value.isPending("minruntime"))
+    }
+
+    @Test
+    fun enterSettingRefusesOutOfRangeAndTheLiveFloor() = runTest {
+        val c = controller()
+        online()
+        assertFalse(c.enterSetting("minruntime", 601))
+        // Ice clear must stay above Ice cutoff (1): its floor is 2.
+        assertFalse(c.enterSetting("fin_recover", 1))
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertTrue(transport.published.isEmpty())
+        assertTrue(c.ui.value.drafts.isEmpty())
+    }
+
+    @Test
+    fun enterSettingRefusesPresetsAndOffline() = runTest {
+        val c = controller()
+        assertFalse(c.enterSetting("coolerset", 5))
+        online()
+        assertFalse(c.enterSetting("sampleinterval", 60))
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertTrue(transport.published.isEmpty())
+    }
 }

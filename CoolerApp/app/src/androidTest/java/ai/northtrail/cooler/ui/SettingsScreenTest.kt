@@ -14,6 +14,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextClearance
+import androidx.compose.ui.test.performTextInput
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -22,6 +24,7 @@ class SettingsScreenTest {
     @get:Rule val rule = createComposeRule()
     private val steps = mutableListOf<Pair<String, Int>>()
     private val choices = mutableListOf<Pair<String, Int>>()
+    private val entries = mutableListOf<Pair<String, Int>>()
 
     private val online = Health(LinkView.ONLINE, "Online", emptyList(), 1_000L)
     private val settings = mapOf(
@@ -31,7 +34,12 @@ class SettingsScreenTest {
     private val base = UiState(configured = true, state = CoolerState(settings = settings), health = online)
 
     private fun show(ui: UiState) = rule.setContent {
-        CoolerTheme { SettingsScreen(ui, onStep = { k, d -> steps += k to d }, onChoose = { k, v -> choices += k to v }) }
+        CoolerTheme { SettingsScreen(
+            ui,
+            onStep = { k, d -> steps += k to d },
+            onChoose = { k, v -> choices += k to v },
+            onEnter = { k, v -> entries += k to v },
+        ) }
     }
 
     @Test
@@ -76,5 +84,29 @@ class SettingsScreenTest {
         rule.onNodeWithTag("value-sampleinterval").assertTextEquals("1 h")
         rule.onNodeWithText("5 m").performClick()
         assertEquals(listOf("sampleinterval" to 300), choices)
+    }
+
+    @Test
+    fun tappingAValueOpensAFieldThatSendsOnlyInRange() {
+        show(base)
+        rule.onNodeWithTag("value-coolerset").performClick()
+        rule.onNodeWithTag("field-coolerset").performTextInput("41")
+        rule.onNodeWithTag("send-coolerset").assertIsNotEnabled()
+        rule.onNodeWithText("2–40").assertExists()
+        rule.onNodeWithTag("field-coolerset").performTextClearance()
+        rule.onNodeWithTag("field-coolerset").performTextInput("7")
+        rule.onNodeWithTag("send-coolerset").assertIsEnabled().performClick()
+        assertEquals(listOf("coolerset" to 7), entries)
+        rule.onNodeWithTag("field-coolerset").assertDoesNotExist()
+    }
+
+    @Test
+    fun openingAnotherRowClosesTheFirst() {
+        show(base)
+        rule.onNodeWithTag("value-coolerset").performClick()
+        rule.onNodeWithTag("value-maxrun").performScrollTo().performClick()
+        rule.onNodeWithTag("field-coolerset").assertDoesNotExist()
+        rule.onNodeWithTag("field-maxrun").assertExists()
+        assertEquals(emptyList<Pair<String, Int>>(), entries)
     }
 }

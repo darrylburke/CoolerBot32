@@ -58,6 +58,7 @@ class CoolerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun stepSetting(key: String, direction: Int) = controller.stepSetting(key, direction)
     fun chooseSetting(key: String, value: Int) = controller.chooseSetting(key, value)
+    fun enterSetting(key: String, value: Int) { controller.enterSetting(key, value) }
     fun startCalibration() = controller.startCalibration()
     fun abortCalibration() = controller.abortCalibration()
     fun resetFinCal() = controller.resetFinCal()

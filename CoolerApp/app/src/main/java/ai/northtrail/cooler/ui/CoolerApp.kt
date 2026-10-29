@@ -80,7 +80,7 @@ fun CoolerApp(viewModel: CoolerViewModel) {
         Box(Modifier.padding(padding)) {
             when (tab) {
                 0 -> StatusScreen(ui, nowEpochS)
-                1 -> SettingsScreen(ui, viewModel::stepSetting, viewModel::chooseSetting)
+                1 -> SettingsScreen(ui, viewModel::stepSetting, viewModel::chooseSetting, viewModel::enterSetting)
                 else -> DetailScreen(
                     ui = ui,
                     brokerHost = brokerConfig.host,

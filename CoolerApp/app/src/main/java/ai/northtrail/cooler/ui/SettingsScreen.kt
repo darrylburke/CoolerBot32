@@ -27,6 +27,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -37,10 +44,18 @@ fun SettingsScreen(
     ui: UiState,
     onStep: (String, Int) -> Unit,
     onChoose: (String, Int) -> Unit,
+    onEnter: (String, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val enabled = ui.health.controlsEnabled
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    // One typed field open at a time; a tap on empty space closes it.
+    var openKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val focusManager = LocalFocusManager.current
+    Column(
+        modifier.fillMaxSize()
+            .pointerInput(Unit) { detectTapGestures { focusManager.clearFocus(); openKey = null } }
+            .verticalScroll(rememberScrollState()),
+    ) {
         StatusStrip(ui.health)
         if (!enabled) {
             Text(
@@ -57,7 +72,17 @@ fun SettingsScreen(
                 modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
             )
             Bounds.ALL.filter { it.group == group }.forEach { b ->
-                if (b.widget == Widget.PRESET) PresetRow(b, ui, enabled, onChoose) else StepperRow(b, ui, enabled, onStep)
+                if (b.widget == Widget.PRESET) {
+                    PresetRow(b, ui, enabled, onChoose)
+                } else {
+                    StepperRow(
+                        b, ui, enabled, onStep,
+                        open = openKey == b.key,
+                        onOpen = { openKey = b.key },
+                        onClose = { if (openKey == b.key) openKey = null },
+                        onEnter = onEnter,
+                    )
+                }
             }
         }
     }
@@ -75,22 +100,31 @@ private fun ValueText(b: Bound, ui: UiState) {
 }
 
 @Composable
-private fun StepperRow(b: Bound, ui: UiState, enabled: Boolean, onStep: (String, Int) -> Unit) {
-    val value = ui.settingValue(b.key)
-    val floor = Bounds.floor(b.key, ui.settingValue("fin_cutoff") ?: b.lo)
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp).heightIn(min = 56.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(b.label, Modifier.weight(1f))
-        ValueText(b, ui)
-        IconButton(onClick = { onStep(b.key, -1) }, enabled = enabled && value != null && value > floor) {
-            Icon(Icons.Filled.Remove, contentDescription = "Lower ${b.label}")
-        }
-        IconButton(onClick = { onStep(b.key, +1) }, enabled = enabled && value != null && value < b.hi) {
-            Icon(Icons.Filled.Add, contentDescription = "Raise ${b.label}")
-        }
-    }
+private fun StepperRow(
+    b: Bound,
+    ui: UiState,
+    enabled: Boolean,
+    onStep: (String, Int) -> Unit,
+    open: Boolean,
+    onOpen: () -> Unit,
+    onClose: () -> Unit,
+    onEnter: (String, Int) -> Unit,
+) {
+    SteppedValue(
+        label = b.label,
+        valueText = Bounds.format(b.key, ui.settingValue(b.key)),
+        pending = ui.isPending(b.key),
+        lo = Bounds.floor(b.key, ui.settingValue("fin_cutoff") ?: b.lo),
+        hi = b.hi,
+        value = ui.settingValue(b.key),
+        enabled = enabled,
+        open = open,
+        onOpen = onOpen,
+        onClose = onClose,
+        onSend = { onEnter(b.key, it) },
+        onStep = { onStep(b.key, it) },
+        tag = b.key,
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
