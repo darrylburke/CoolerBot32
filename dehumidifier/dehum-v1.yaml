@@ -120,7 +120,7 @@ mqtt:
         - lambda: |-
             dehum::Cmd c;
             if (x["min_run"].is<int>())   c.min_run   = x["min_run"].as<int>();
-            if (x["timer_h"].is<int>())   c.timer_h   = x["timer_h"].as<int>();
+            if (x["timer_min"].is<int>()) c.timer_min = x["timer_min"].as<int>();
             if (x["cycle_on"].is<int>())  c.cycle_on  = x["cycle_on"].as<int>();
             if (x["cycle_off"].is<int>()) c.cycle_off = x["cycle_off"].as<int>();
             if (x["dehum_rh"].is<int>())  c.dehum_rh  = x["dehum_rh"].as<int>();
@@ -226,7 +226,7 @@ script:
             root["humid"] = o.humid ? 1 : 0;
             root["dehum_rh"] = s.dehum_rh;
             root["min_run"] = s.min_run;
-            root["timer_h"] = s.timer_h;
+            root["timer_min"] = s.timer_min;
             root["cycle_on"] = s.cycle_on;
             root["cycle_off"] = s.cycle_off;
             root["run_s"] = o.run_s;

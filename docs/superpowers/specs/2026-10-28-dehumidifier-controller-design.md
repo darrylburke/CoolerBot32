@@ -78,7 +78,7 @@ The dehumidifier controller owns the mode and stores it across reboots.
 | AUTO | follows the Cooler's `want` (§2.2) | when another mode is chosen |
 | ON | on | when another mode is chosen |
 | OFF | off, **immediately** (ignores min run time) | when another mode is chosen |
-| TIMER | on for `timer_h` whole hours | at the end of the time → **AUTO** |
+| TIMER | on for `timer_min` minutes (changed from whole hours on 2026-10-29 at the user's request) | at the end of the time → **AUTO** |
 | CYCLE | on `cycle_on` min, off `cycle_off` min, repeating, starting with on | when another mode is chosen |
 
 - ON, TIMER and CYCLE ignore the AC and the RH.
@@ -88,7 +88,7 @@ The dehumidifier controller owns the mode and stores it across reboots.
 - `cycle_on` can never be set below `min_run`; if `min_run` is raised above
   it, `cycle_on` is bumped up to match.
 - The TIMER countdown and CYCLE phase reset whenever the mode command is
-  received again (sending TIMER while in TIMER restarts it with the new hours).
+  received again (sending TIMER while in TIMER restarts it with the new minutes).
 
 ### 2.2 AUTO (revised 2026-10-28: humidity is measured locally)
 
@@ -146,7 +146,7 @@ the Cooler), so mode and timers survive an outage.
 ### 2.5 Startup
 
 Relay off at boot (`restore_mode: ALWAYS_OFF`, explicit turn-off in
-`on_boot`). Mode, `timer_h`, `cycle_on`, `cycle_off` and `min_run` are
+`on_boot`). Mode, `timer_min`, `cycle_on`, `cycle_off` and `min_run` are
 restored from flash. A restored TIMER or CYCLE restarts per §2.1.
 `min_run` does not apply to the boot-off state.
 
@@ -165,7 +165,7 @@ must stay open indefinitely.
 | Key | Unit | Bounds | Default |
 |---|---|---|---|
 | `min_run` | min | 0 .. 60 | 10 |
-| `timer_h` | h | 1 .. 24 | 2 |
+| `timer_min` | min | 1 .. 1440 | 120 |
 | `cycle_on` | min | max(1, `min_run`) .. 240 | 30 |
 | `cycle_off` | min | 1 .. 240 | 30 |
 | `dehum_rh` | %RH | 30 .. 95 | 65 (AUTO humidity threshold, local HDC1080) |
@@ -189,7 +189,7 @@ Any combination of keys in one message:
 
 ```json
 {"mode":"auto"}                       // auto | on | off | timer | cycle
-{"mode":"timer","timer_h":3}
+{"mode":"timer","timer_min":90}
 {"mode":"cycle","cycle_on":20,"cycle_off":40}
 {"min_run":15}
 ```
@@ -220,7 +220,7 @@ ignored.
   "phase": "on",             // CYCLE only: on | off; null otherwise
   "temp": 4.1, "humidity": 71.0,   // local HDC1080, null if stale
   "humid": 1, "dehum_rh": 65,
-  "min_run": 10, "timer_h": 2, "cycle_on": 30, "cycle_off": 30,
+  "min_run": 10, "timer_min": 120, "cycle_on": 30, "cycle_off": 30,
   "run_s": 412,              // seconds in the current relay state
   "uptime_s": 86400
 }

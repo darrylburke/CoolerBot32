@@ -8,7 +8,7 @@ import org.junit.Test
 
 class DehumStateParserTest {
     private val real = """{"v":1,"mode":"cycle","relay":1,"want":null,"link_lost":0,"hold_s":120,"remain_s":300,""" +
-        """"phase":"on","temp":23.6,"humidity":54.5,"humid":0,"dehum_rh":65,"min_run":10,"timer_h":2,""" +
+        """"phase":"on","temp":23.6,"humidity":54.5,"humid":0,"dehum_rh":65,"min_run":10,"timer_min":120,""" +
         """"cycle_on":30,"cycle_off":30,"run_s":25,"uptime_s":20}"""
 
     @Test
@@ -24,7 +24,7 @@ class DehumStateParserTest {
         assertEquals(54.5, s.humidity!!, 0.0)
         assertEquals(23.6, s.temp!!, 0.0)
         assertFalse(s.humid)
-        assertEquals(mapOf("timer_h" to 2, "cycle_on" to 30, "cycle_off" to 30, "min_run" to 10, "dehum_rh" to 65), s.settings)
+        assertEquals(mapOf("timer_min" to 120, "cycle_on" to 30, "cycle_off" to 30, "min_run" to 10, "dehum_rh" to 65), s.settings)
         assertEquals(25L, s.runS)
         assertEquals(20L, s.uptimeS)
     }

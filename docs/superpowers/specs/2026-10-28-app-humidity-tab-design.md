@@ -75,7 +75,7 @@ Number rows (each − value +, tap the value to type, see section 5):
 
 | Key | Label | Unit | Range | +/- step |
 |---|---|---|---|---|
-| `timer_h` | Timer | h | 1 .. 24 | 1 |
+| `timer_min` | Timer | min | 1 .. 1440 | 15 |
 | `cycle_on` | Cycle run | min | max(1, `min_run`) .. 240 | 5 |
 | `cycle_off` | Cycle rest | min | 1 .. 240 | 5 |
 | `min_run` | Min run | min | 0 .. 60 | 1 |
@@ -85,9 +85,9 @@ Each change publishes `{"<key>":<int>}` to `dehum/cmd` (never retained) and is
 pending until a live `dehum/data` reports the value, reverting after 3 s
 without one — the existing `PendingCommands` behaviour. Raising `min_run` above
 `cycle_on` raises `cycle_on` too (firmware); the app just shows what comes
-back. Changing `timer_h` or the cycle minutes while that mode runs changes the
+back. Changing `timer_min` or the cycle minutes while that mode runs changes the
 running mode's lengths without restarting it (firmware behaviour; lowering
-`timer_h` below the elapsed time ends TIMER at once and returns to AUTO — the
+`timer_min` below the elapsed time ends TIMER at once and returns to AUTO — the
 hint under the timer row says so while TIMER runs).
 
 Offline (no `dehum/data`, `dehum/availability` = `offline`, or the broker

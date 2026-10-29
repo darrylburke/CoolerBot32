@@ -11,7 +11,9 @@ namespace dehum_glue {
 
 // Changing Settings' layout changes its size, the load fails, and the
 // defaults are used -- the intended upgrade path.
-constexpr uint32_t PREF_DEHUM_SETTINGS = 0xDE40015Eu;
+// A new key when a field changes meaning: the old record (timer in hours) is
+// left behind, and the settings start from their defaults once.
+constexpr uint32_t PREF_DEHUM_SETTINGS = 0xDE40015Fu;
 
 inline dehum::Settings& settings() { static dehum::Settings v; return v; }
 inline dehum::State& state() { static dehum::State v; return v; }

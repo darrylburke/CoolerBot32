@@ -2,10 +2,10 @@ package ai.northtrail.cooler.model
 
 /** Mirrors the dehumidifier's clamp_settings() (dehumidifier/dehum_logic.h). */
 object DehumBounds {
-    val KEYS: List<String> = listOf("timer_h", "cycle_on", "cycle_off", "min_run", "dehum_rh")
+    val KEYS: List<String> = listOf("timer_min", "cycle_on", "cycle_off", "min_run", "dehum_rh")
 
     val ALL: List<Bound> = listOf(
-        Bound("timer_h", "Timer", "h", 1, 24, 1, Widget.STEPPER, Group.DEHUM),
+        Bound("timer_min", "Timer", "min", 1, 1440, 15, Widget.STEPPER, Group.DEHUM),
         Bound("cycle_on", "Cycle run", "min", 1, 240, 5, Widget.STEPPER, Group.DEHUM),
         Bound("cycle_off", "Cycle rest", "min", 1, 240, 5, Widget.STEPPER, Group.DEHUM),
         Bound("min_run", "Min run", "min", 0, 60, 1, Widget.STEPPER, Group.DEHUM),

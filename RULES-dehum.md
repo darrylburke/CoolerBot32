@@ -28,7 +28,7 @@ black / the narrow plug blade.
 | auto | on while the Cooler sends `want: 1` (AC resting) **and** local RH is humid | another mode |
 | on | on | another mode |
 | off | off at once (ignores `min_run`) | another mode |
-| timer | on for `timer_h` hours | time up → **auto** |
+| timer | on for `timer_min` minutes | time up → **auto** |
 | cycle | on `cycle_on` min, off `cycle_off` min, repeating, starting on | another mode |
 
 - on, timer and cycle ignore the AC and the humidity.
@@ -49,7 +49,7 @@ black / the narrow plug blade.
 | Key | Unit | Bounds | Default |
 |---|---|---|---|
 | `min_run` | min | 0 .. 60 | 10 |
-| `timer_h` | h | 1 .. 24 | 2 |
+| `timer_min` | min | 1 .. 1440 (24 h) | 120 |
 | `cycle_on` | min | max(1, `min_run`) .. 240 | 30 |
 | `cycle_off` | min | 1 .. 240 | 30 |
 | `dehum_rh` | %RH | 30 .. 95 | 65 |
@@ -62,7 +62,7 @@ Same broker as the Cooler, port 8883, TLS against the same private CA.
 
 | Topic | Direction | Retained | Payload |
 |---|---|---|---|
-| `dehum/cmd` | panel/app → dehumidifier | no | `{"mode":"timer","timer_h":3}`, `{"mode":"cycle","cycle_on":20,"cycle_off":40}`, `{"min_run":15}` |
+| `dehum/cmd` | panel/app → dehumidifier | no | `{"mode":"timer","timer_min":90}`, `{"mode":"cycle","cycle_on":20,"cycle_off":40}`, `{"min_run":15}` |
 | `dehum/want` | Cooler → dehumidifier | no, QoS 0 | `{"want":1}` on change and every 30 s |
 | `dehum/data` | dehumidifier → all | yes | every 30 s and on change, below |
 | `dehum/availability` | dehumidifier | yes | `online` / `offline` (LWT) |
@@ -72,7 +72,7 @@ Same broker as the Cooler, port 8883, TLS against the same private CA.
 `link_lost`, `hold_s` (min run left), `remain_s` (timer left, or cycle phase
 left), `phase` (`on`/`off`, cycle only, else null), `temp` and `humidity`
 (local sensor, null if no reading in 30 s), `humid`, `dehum_rh`, `min_run`,
-`timer_h`, `cycle_on`, `cycle_off`, `run_s`, `uptime_s`.
+`timer_min`, `cycle_on`, `cycle_off`, `run_s`, `uptime_s`.
 
 | Login | Used by | Broker ACL |
 |---|---|---|

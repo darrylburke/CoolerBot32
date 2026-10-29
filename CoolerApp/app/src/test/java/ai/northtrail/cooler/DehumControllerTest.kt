@@ -32,7 +32,7 @@ private class FakeDehumTransport : CoolerTransport {
 
 private fun data(mode: String = "cycle", humidity: String = "54.5", cycleOn: Int = 30, minRun: Int = 10, rh: Int = 65) =
     """{"v":1,"mode":"$mode","relay":1,"want":null,"link_lost":0,"hold_s":0,"remain_s":300,"phase":"on",""" +
-        """"temp":23.6,"humidity":$humidity,"humid":0,"dehum_rh":$rh,"min_run":$minRun,"timer_h":2,""" +
+        """"temp":23.6,"humidity":$humidity,"humid":0,"dehum_rh":$rh,"min_run":$minRun,"timer_min":120,""" +
         """"cycle_on":$cycleOn,"cycle_off":30,"run_s":25,"uptime_s":20}"""
 
 @OptIn(ExperimentalCoroutinesApi::class)

@@ -18,7 +18,7 @@ class HumidityScreenTest {
     @get:Rule val rule = createComposeRule()
     private val modes = mutableListOf<DehumMode>()
 
-    private val settings = mapOf("timer_h" to 2, "cycle_on" to 30, "cycle_off" to 30, "min_run" to 10, "dehum_rh" to 65)
+    private val settings = mapOf("timer_min" to 120, "cycle_on" to 30, "cycle_off" to 30, "min_run" to 10, "dehum_rh" to 65)
     private val base = DehumUi(
         view = DehumView.ONLINE,
         state = DehumState(mode = DehumMode.CYCLE, phaseOn = true, remainS = 700, humidity = 54.4, settings = settings),

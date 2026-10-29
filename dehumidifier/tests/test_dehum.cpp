@@ -39,7 +39,7 @@ Cmd mode_cmd(Mode m) { Cmd c; c.mode = m; return c; }
 TEST_CASE("clamp_settings bounds") {
     struct B { int Settings::*f; int lo, hi; };
     const B bounds[] = {
-        {&Settings::min_run, 0, 60}, {&Settings::timer_h, 1, 24}, {&Settings::cycle_off, 1, 240},
+        {&Settings::min_run, 0, 60}, {&Settings::timer_min, 1, 1440}, {&Settings::cycle_off, 1, 240},
         {&Settings::dehum_rh, 30, 95},
     };
     for (auto b : bounds) {
@@ -87,7 +87,7 @@ TEST_CASE("boot stays off until first connect") {
 }
 
 TEST_CASE("timer restarts at first connect") {
-    Settings s; s.mode = Mode::Timer; s.timer_h = 1;
+    Settings s; s.mode = Mode::Timer; s.timer_min = 60;
     Rig r(s, false);
     r.run(5 * 60 * 1000);
     CHECK_FALSE(r.o.relay);
@@ -186,10 +186,10 @@ TEST_CASE("cycle phases") {
 
 TEST_CASE("resend restarts with new values") {
     Rig r;
-    r.cmd(mode_cmd(Mode::Timer));                    // timer_h 2
+    r.cmd(mode_cmd(Mode::Timer));                    // timer_min 120
     r.run(30 * 60 * 1000);
     CHECK(r.o.remain_s == 5400);
-    Cmd t = mode_cmd(Mode::Timer); t.timer_h = 3;
+    Cmd t = mode_cmd(Mode::Timer); t.timer_min = 180;
     r.cmd(t);
     CHECK(r.o.remain_s == 10800);
 
@@ -219,7 +219,7 @@ TEST_CASE("broker loss cuts after 60 s") {
 }
 
 TEST_CASE("timer counts through broker loss") {
-    Settings s; s.timer_h = 1;
+    Settings s; s.timer_min = 60;
     Rig r(s);
     r.cmd(mode_cmd(Mode::Timer));
     r.run(10 * 60 * 1000);
@@ -245,7 +245,7 @@ TEST_CASE("want remembered across modes") {
 }
 
 TEST_CASE("timers survive millis wrap and late ticks") {
-    Settings s; s.timer_h = 1;
+    Settings s; s.timer_min = 60;
     Rig r(s, true, UINT32_MAX - 30000u);
     r.cmd(mode_cmd(Mode::Timer));
     uint32_t elapsed_s = 0;
@@ -341,4 +341,17 @@ TEST_CASE("on, timer and cycle ignore rh") {
     CHECK(r.cmd(mode_cmd(Mode::On)).relay);
     CHECK(r.cmd(mode_cmd(Mode::Timer)).relay);
     CHECK(r.cmd(mode_cmd(Mode::Cycle)).relay);
+}
+
+TEST_CASE("timer takes whole minutes, default 120") {
+    CHECK(Settings{}.timer_min == 120);
+    Settings s; s.timer_min = 45;
+    Rig r(s);
+    r.cmd(mode_cmd(Mode::Timer));
+    CHECK(r.o.remain_s == 2700);
+    r.run(2699 * 1000);
+    CHECK(r.o.relay);
+    r.run(1000);
+    CHECK_FALSE(r.o.relay);
+    CHECK(r.o.mode == Mode::Auto);
 }

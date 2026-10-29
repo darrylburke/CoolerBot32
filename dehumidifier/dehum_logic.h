@@ -40,7 +40,7 @@ inline std::optional<Mode> parse_mode(const char* s) {
 // Persisted as one record (spec 3.1). The mode is stored too.
 struct Settings {
     int min_run = 10;    // min  0 .. 60
-    int timer_h = 2;     // h    1 .. 24
+    int timer_min = 120; // min  1 .. 1440 (24 h)
     int cycle_on = 30;   // min  max(1, min_run) .. 240
     int cycle_off = 30;  // min  1 .. 240
     int dehum_rh = 65;   // %RH 30 .. 95, AUTO threshold on the local humidity sensor
@@ -52,7 +52,7 @@ inline int clampi(int v, int lo, int hi) { return v < lo ? lo : (v > hi ? hi : v
 // min_run first: cycle_on's floor tracks it, so raising min_run bumps cycle_on.
 inline void clamp_settings(Settings& s) {
     s.min_run = clampi(s.min_run, 0, 60);
-    s.timer_h = clampi(s.timer_h, 1, 24);
+    s.timer_min = clampi(s.timer_min, 1, 1440);
     s.cycle_on = clampi(s.cycle_on, s.min_run > 1 ? s.min_run : 1, 240);
     s.cycle_off = clampi(s.cycle_off, 1, 240);
     s.dehum_rh = clampi(s.dehum_rh, 30, 95);
@@ -84,7 +84,7 @@ struct State {
 };
 
 struct Cmd {
-    std::optional<int> min_run, timer_h, cycle_on, cycle_off, dehum_rh;
+    std::optional<int> min_run, timer_min, cycle_on, cycle_off, dehum_rh;
     std::optional<Mode> mode;
 };
 
@@ -119,14 +119,14 @@ inline void restart_mode_timers(State& st) { st.mode_ms = 0; st.cycle_on_phase =
 inline bool apply_cmd(const Cmd& c, Settings& s, State& st) {
     const Settings before = s;
     if (c.min_run) s.min_run = *c.min_run;
-    if (c.timer_h) s.timer_h = *c.timer_h;
+    if (c.timer_min) s.timer_min = *c.timer_min;
     if (c.cycle_on) s.cycle_on = *c.cycle_on;
     if (c.cycle_off) s.cycle_off = *c.cycle_off;
     if (c.dehum_rh) s.dehum_rh = *c.dehum_rh;
     if (c.mode) s.mode = *c.mode;
     clamp_settings(s);
     if (c.mode) restart_mode_timers(st);
-    return s.min_run != before.min_run || s.timer_h != before.timer_h ||
+    return s.min_run != before.min_run || s.timer_min != before.timer_min ||
            s.cycle_on != before.cycle_on || s.cycle_off != before.cycle_off ||
            s.dehum_rh != before.dehum_rh || s.mode != before.mode;
 }
@@ -167,7 +167,7 @@ inline Outputs step(const Inputs& in, Settings& s, State& st, uint32_t now) {
     o.want = want_fresh ? (st.want ? 1 : 0) : -1;
 
     if (s.mode == Mode::Timer) {
-        const uint32_t limit = (uint32_t)s.timer_h * 3600000u;
+        const uint32_t limit = (uint32_t)s.timer_min * 60000u;
         if (st.mode_ms >= limit) { s.mode = Mode::Auto; o.settings_changed = true; }
         else o.remain_s = ceil_s(limit - st.mode_ms);
     }

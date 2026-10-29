@@ -90,7 +90,7 @@ fun HumidityControls(
                 onSend = { onEnter(b.key, it) },
                 onStep = { onStep(b.key, it) },
                 tag = b.key,
-                note = if (b.key == "timer_h" && ui.state?.mode == DehumMode.TIMER) {
+                note = if (b.key == "timer_min" && ui.state?.mode == DehumMode.TIMER) {
                     "Lowering below the time already run ends the timer."
                 } else {
                     null
