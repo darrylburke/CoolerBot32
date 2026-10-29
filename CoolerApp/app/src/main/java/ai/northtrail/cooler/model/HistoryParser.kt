@@ -20,30 +20,42 @@ object HistoryParser {
     private const val MAX_AHEAD_S = 120L
 
     /** Null for anything that is not a sound v1 window. [nowS] is this phone's clock. */
-    fun parse(payload: String, nowS: Long): HistoryWindow? {
+    fun parse(payload: String, nowS: Long): HistoryWindow? =
+        window(payload, nowS, listOf("temp", "hum", "relay")) { epochS, (temp, hum, relay), i ->
+            val t = temp[i].number() ?: return@window null
+            Sample(epochS, t, relayAt(relay, i), hum[i].number())
+        }
+
+    /**
+     * A v1 window of equal-length [arrays] (one slot per minute from `t0`); [sample]
+     * turns slot i into a [Sample] or null to leave it out. Shared with [DehumHistoryParser].
+     */
+    internal fun window(
+        payload: String,
+        nowS: Long,
+        arrays: List<String>,
+        sample: (epochS: Long, arrays: List<JsonArray>, i: Int) -> Sample?,
+    ): HistoryWindow? {
         val o = runCatching { Json.parseToJsonElement(payload) }.getOrNull() as? JsonObject ?: return null
         if (o.prim("v")?.intOrNull != VERSION || o.prim("interval_s")?.longOrNull != INTERVAL_S) return null
         val t0 = o.prim("t0")?.longOrNull ?: return null
         if (t0 < TrendBuffer.MIN_VALID_EPOCH) return null
-        val temp = o["temp"] as? JsonArray ?: return null
-        val hum = o["hum"] as? JsonArray ?: return null
-        val relay = o["relay"] as? JsonArray ?: return null
-        val n = temp.size
-        if (n == 0 || n > MAX_SLOTS || hum.size != n || relay.size != n) return null
+        val arr = arrays.map { o[it] as? JsonArray ?: return null }
+        val n = arr.first().size
+        if (n == 0 || n > MAX_SLOTS || arr.any { it.size != n }) return null
         val toS = t0 + n * INTERVAL_S
         // An unset phone clock cannot judge "the future".
         if (nowS >= TrendBuffer.MIN_VALID_EPOCH && toS > nowS + MAX_AHEAD_S) return null
-        val samples = (0 until n).mapNotNull { i ->
-            val t = temp[i].number() ?: return@mapNotNull null
-            val r = when (relay[i].number()?.toInt()) { 1 -> true; 0 -> false; else -> null }
-            Sample(t0 + i * INTERVAL_S, t, r, hum[i].number())
-        }
+        val samples = (0 until n).mapNotNull { i -> sample(t0 + i * INTERVAL_S, arr, i) }
         return HistoryWindow(t0, toS, samples)
     }
+
+    internal fun relayAt(relay: JsonArray, i: Int): Boolean? =
+        when (relay[i].number()?.toInt()) { 1 -> true; 0 -> false; else -> null }
 
     private fun JsonObject.prim(key: String): JsonPrimitive? =
         (this[key] as? JsonPrimitive)?.takeUnless { it is JsonNull || it.isString }
 
-    private fun JsonElement.number(): Double? =
+    internal fun JsonElement.number(): Double? =
         (this as? JsonPrimitive)?.takeUnless { it is JsonNull || it.isString }?.doubleOrNull
 }

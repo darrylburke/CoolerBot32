@@ -60,7 +60,7 @@ fun TrendChart(
     }
     val bandLo = if (setpoint != null && range != null) (setpoint - range).toDouble() else null
     val bandHi = if (setpoint != null && range != null) (setpoint + range).toDouble() else null
-    val temps = samples.map { it.tempC }
+    val temps = samples.map { it.value }
     val yMin = listOfNotNull(temps.min(), bandLo).min() - 1.0
     val yMax = listOfNotNull(temps.max(), bandHi).max() + 1.0
     val hums = samples.mapNotNull { it.humidity }
@@ -130,7 +130,7 @@ fun TrendChart(
                 val rhRuns = segments.flatMap { seg -> splitWhere(seg) { it.humidity == null } }
                 trace(rhRuns, CoolerColors.Humidity, 1.5f, { x(it.epochS) }, { hy(it.humidity!!) })
             }
-            if (shown.temp) trace(segments, CoolerColors.Accent, 2f, { x(it.epochS) }, { y(it.tempC) })
+            if (shown.temp) trace(segments, CoolerColors.Accent, 2f, { x(it.epochS) }, { y(it.value) })
             if (shown.avg && average.size >= 2) {
                 // The rolling mean is smooth by construction; one path, broken only
                 // where the record (and so the mean) has a hole.

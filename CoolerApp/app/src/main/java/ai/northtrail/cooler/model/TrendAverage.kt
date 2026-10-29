@@ -94,6 +94,6 @@ object TrendAverage {
 
     private fun segments(samples: List<Sample>): List<Seg> =
         TrendSegments.split(samples).filter { it.size >= 2 }.map { seg ->
-            Seg(LongArray(seg.size) { seg[it].epochS }, DoubleArray(seg.size) { seg[it].tempC })
+            Seg(LongArray(seg.size) { seg[it].epochS }, DoubleArray(seg.size) { seg[it].value })
         }
 }

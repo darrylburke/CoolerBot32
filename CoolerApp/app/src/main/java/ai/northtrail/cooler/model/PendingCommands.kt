@@ -18,7 +18,7 @@ object PendingCommands {
      */
     fun resolve(
         pending: Map<String, Pending>,
-        state: CoolerState?,
+        reported: Map<String, Int>?,
         stateLiveAtMillis: Long?,
         nowMillis: Long,
     ): Resolution {
@@ -28,7 +28,7 @@ object PendingCommands {
         for ((key, p) in pending) {
             val live = stateLiveAtMillis != null && stateLiveAtMillis >= p.sentAtMillis
             when {
-                live && state?.settings?.get(key) == p.value -> confirmed += key
+                live && reported?.get(key) == p.value -> confirmed += key
                 nowMillis - p.sentAtMillis >= TIMEOUT_MS -> timedOut += key
                 else -> remaining[key] = p
             }

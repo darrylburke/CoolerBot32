@@ -2,7 +2,7 @@ package ai.northtrail.cooler.model
 
 enum class Widget { STEPPER, PRESET }
 
-enum class Group(val title: String) { BOX("Box"), COIL("Coil"), TIMING("Timing") }
+enum class Group(val title: String) { BOX("Box"), COIL("Coil"), TIMING("Timing"), DEHUM("Dehumidifier") }
 
 data class Bound(
     val key: String,

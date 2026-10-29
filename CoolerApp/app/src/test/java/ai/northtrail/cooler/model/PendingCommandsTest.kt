@@ -10,35 +10,42 @@ class PendingCommandsTest {
 
     @Test
     fun liveMatchingValueAfterSendingConfirms() {
-        val r = PendingCommands.resolve(sent, seven, stateLiveAtMillis = 1_500, nowMillis = 1_500)
+        val r = PendingCommands.resolve(sent, seven.settings, stateLiveAtMillis = 1_500, nowMillis = 1_500)
         assertEquals(setOf("coolerset"), r.confirmed)
         assertEquals(emptyMap<String, Pending>(), r.pending)
     }
 
     @Test
     fun dataFromBeforeTheSendDoesNotConfirm() {
-        val r = PendingCommands.resolve(sent, seven, stateLiveAtMillis = 900, nowMillis = 1_500)
+        val r = PendingCommands.resolve(sent, seven.settings, stateLiveAtMillis = 900, nowMillis = 1_500)
         assertEquals(sent, r.pending)
     }
 
     @Test
     fun retainedDataDoesNotConfirm() {
-        val r = PendingCommands.resolve(sent, seven, stateLiveAtMillis = null, nowMillis = 1_500)
+        val r = PendingCommands.resolve(sent, seven.settings, stateLiveAtMillis = null, nowMillis = 1_500)
         assertEquals(sent, r.pending)
     }
 
     @Test
     fun aDifferentValueKeepsWaiting() {
-        val r = PendingCommands.resolve(sent, four, stateLiveAtMillis = 1_500, nowMillis = 1_500)
+        val r = PendingCommands.resolve(sent, four.settings, stateLiveAtMillis = 1_500, nowMillis = 1_500)
         assertEquals(sent, r.pending)
         assertEquals(emptySet<String>(), r.timedOut)
     }
 
     @Test
     fun timesOutAtThreeSeconds() {
-        assertEquals(sent, PendingCommands.resolve(sent, four, 1_500, nowMillis = 3_999).pending)
-        val r = PendingCommands.resolve(sent, four, 1_500, nowMillis = 4_000)
+        assertEquals(sent, PendingCommands.resolve(sent, four.settings, 1_500, nowMillis = 3_999).pending)
+        val r = PendingCommands.resolve(sent, four.settings, 1_500, nowMillis = 4_000)
         assertEquals(setOf("coolerset"), r.timedOut)
         assertEquals(emptyMap<String, Pending>(), r.pending)
+    }
+
+    @Test
+    fun anyReportedMapConfirms() {
+        val p = mapOf("min_run" to Pending(15, sentAtMillis = 1_000))
+        assertEquals(setOf("min_run"), PendingCommands.resolve(p, mapOf("min_run" to 15), 1_500, 1_500).confirmed)
+        assertEquals(p, PendingCommands.resolve(p, null, 1_500, 1_500).pending)
     }
 }

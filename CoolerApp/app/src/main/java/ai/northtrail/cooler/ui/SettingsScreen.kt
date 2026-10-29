@@ -64,7 +64,7 @@ fun SettingsScreen(
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
-        Group.entries.forEach { group ->
+        Group.entries.filter { g -> Bounds.ALL.any { it.group == g } }.forEach { group ->
             Text(
                 group.title,
                 style = MaterialTheme.typography.titleMedium,

@@ -203,7 +203,7 @@ class CoolerController(
         state.update { current ->
             val next = change(current)
             val now = clock()
-            val r = PendingCommands.resolve(next.pending, next.state, next.stateLiveAtMillis, now)
+            val r = PendingCommands.resolve(next.pending, next.state?.settings, next.stateLiveAtMillis, now)
             next.copy(
                 health = Liveness.evaluate(next.link, next.online, next.state, next.lastLiveDataAtMillis, now),
                 pending = r.pending,
