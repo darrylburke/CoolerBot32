@@ -29,7 +29,7 @@ class StatusScreenTest {
             settings = mapOf("coolerset" to 4, "range" to 2),
         )
         show(UiState(configured = true, state = s, health = online))
-        rule.onNodeWithText("4.8 °C").assertExists()
+        rule.onNodeWithText("4.8 / -.- °C").assertExists()
         rule.onNodeWithText("78 %RH").assertExists()
         rule.onNodeWithText("set 4 ±2 · on >6 off <2").assertExists()
         rule.onNodeWithText("NORMAL").assertExists()
@@ -49,7 +49,7 @@ class StatusScreenTest {
             ),
         )
         rule.onAllNodesWithText("Controller offline", substring = true).assertCountEquals(2) // strip + banner
-        rule.onNodeWithText("-- °C").assertExists()
+        rule.onNodeWithText("-- / -.- °C").assertExists()
         rule.onNodeWithText("No history yet").assertExists()
     }
 }

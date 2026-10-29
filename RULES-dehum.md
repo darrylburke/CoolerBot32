@@ -66,6 +66,7 @@ Same broker as the Cooler, port 8883, TLS against the same private CA.
 | `dehum/want` | Cooler → dehumidifier | no, QoS 0 | `{"want":1}` on change and every 30 s |
 | `dehum/data` | dehumidifier → all | yes | every 30 s and on change, below |
 | `dehum/availability` | dehumidifier | yes | `online` / `offline` (LWT) |
+| `dehum/history` | Node-RED → panel/app | no | 24 h in 1-min slots: `{"v":1,"t0":…,"interval_s":60,"hum":[…],"temp":[…],"relay":[…]}` (`nodered/dehum-history.json`) |
 
 `dehum/data`: `v` (1), `mode`, `relay`, `want` (null if none in 90 s),
 `link_lost`, `hold_s` (min run left), `remain_s` (timer left, or cycle phase
@@ -77,7 +78,10 @@ left), `phase` (`on`/`off`, cycle only, else null), `temp` and `humidity`
 |---|---|---|
 | `dehum` (`dehum_mqtt_username`) | the dehumidifier | read/write `dehum/#` |
 | controller login | the Cooler | + write `dehum/want` |
-| panel and app logins | CoolerPanel, CoolerApp | + read `dehum/data`, `dehum/availability`; write `dehum/cmd` |
+| panel and app logins | CoolerPanel, CoolerApp | + read `dehum/data`, `dehum/availability`, `dehum/history`; write `dehum/cmd` |
+| controller login (also Node-RED's) | Cooler, Node-RED | + read `dehum/data`, `dehum/availability`; write `dehum/history` |
+
+The Android app's **Humidity** tab shows and sets all of this (`CoolerApp/README.md`).
 
 Passwords live only in the git-ignored `dehumidifier/secrets.yaml`
 (keys in `secrets.yaml.example`).
