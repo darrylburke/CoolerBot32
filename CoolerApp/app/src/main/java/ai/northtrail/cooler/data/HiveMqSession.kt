@@ -115,7 +115,8 @@ class HiveMqSession(
             .build()
         client.subscribe(request).whenComplete { ack, error ->
             if (stopped) return@whenComplete
-            // A SUBACK with any failure code arrives as an error carrying that SUBACK.
+            // HiveMQ can hand a SUBACK holding failure codes back as an error carrying it
+            // (seen in HiveMqSessionTest with one optional topic of six refused): read its codes.
             val cause = (error as? CompletionException)?.cause ?: error
             val codes = ack?.returnCodes ?: (cause as? Mqtt3SubAckException)?.mqttMessage?.returnCodes
             when {
