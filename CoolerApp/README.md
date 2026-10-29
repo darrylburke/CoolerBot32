@@ -8,7 +8,13 @@ wall LCD. Design: `docs/superpowers/specs/2026-09-28-cooler-android-app-design.m
   panel), override switch, defrost / fault chips, coil temperature, compressor,
   and a trend of the controller's recent history plus live data.
 - **Settings**: the controller's ten settings with the panel's limits. Changes
-  are sent after a short pause and confirmed by the controller.
+  are sent after a short pause and confirmed by the controller. Tap a value to
+  type it instead of stepping (Send stays off outside the allowed range).
+- **Humidity**: the dehumidifier (`../RULES-dehum.md`). *Graph*: humidity now and
+  its 1-hour average, the mode, and a trend with the AUTO threshold dashed and
+  running time shaded (24 h back with Node-RED's `dehum/history`). *Controls*:
+  ON / OFF / TIMER / AUTO / CYCLE and its five settings, stepped or typed. It
+  works when the Cooler is offline; only the broker and the dehumidifier are needed.
 - **Detail**: every status field, fin calibration (start, abort, reset) and the
   broker settings.
 

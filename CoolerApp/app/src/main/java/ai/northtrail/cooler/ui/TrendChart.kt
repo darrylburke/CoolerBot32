@@ -23,6 +23,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextMeasurer
@@ -50,6 +51,12 @@ fun TrendChart(
     shown: SeriesShown,
     average: List<Pair<Long, Double>> = emptyList(),
     windowMean: Double? = null,
+    /** Label unit for the primary series ("°" for the Cooler, "%" for humidity). */
+    unit: String = "°",
+    /** Colour of the primary series' line. */
+    lineColor: Color = CoolerColors.Accent,
+    /** A dashed horizontal line on the primary scale (the dehumidifier's AUTO threshold). */
+    threshold: Double? = null,
     modifier: Modifier = Modifier,
 ) {
     if (samples.size < 2) {
@@ -61,8 +68,8 @@ fun TrendChart(
     val bandLo = if (setpoint != null && range != null) (setpoint - range).toDouble() else null
     val bandHi = if (setpoint != null && range != null) (setpoint + range).toDouble() else null
     val temps = samples.map { it.value }
-    val yMin = listOfNotNull(temps.min(), bandLo).min() - 1.0
-    val yMax = listOfNotNull(temps.max(), bandHi).max() + 1.0
+    val yMin = listOfNotNull(temps.min(), bandLo, threshold).min() - 1.0
+    val yMax = listOfNotNull(temps.max(), bandHi, threshold).max() + 1.0
     val hums = samples.mapNotNull { it.humidity }
     val showRh = shown.rh && hums.isNotEmpty()
     val hMin = (hums.minOrNull() ?: 0.0) - 2.0
@@ -79,11 +86,11 @@ fun TrendChart(
     Column(modifier) {
         Row(Modifier.fillMaxWidth()) {
             if (shown.temp) {
-                Text("max ${StatusText.temp(temps.max())}°", color = CoolerColors.Muted, style = MaterialTheme.typography.labelSmall)
+                Text("max ${StatusText.temp(temps.max())}$unit", color = CoolerColors.Muted, style = MaterialTheme.typography.labelSmall)
             }
             if (shown.avg && windowMean != null) {
                 Text(
-                    "   avg ${StatusText.temp(windowMean)}°",
+                    "   avg ${StatusText.temp(windowMean)}$unit",
                     color = CoolerColors.Average,
                     style = MaterialTheme.typography.labelSmall,
                 )
@@ -130,7 +137,13 @@ fun TrendChart(
                 val rhRuns = segments.flatMap { seg -> splitWhere(seg) { it.humidity == null } }
                 trace(rhRuns, CoolerColors.Humidity, 1.5f, { x(it.epochS) }, { hy(it.humidity!!) })
             }
-            if (shown.temp) trace(segments, CoolerColors.Accent, 2f, { x(it.epochS) }, { y(it.value) })
+            if (threshold != null) {
+                drawLine(
+                    CoolerColors.Warn, Offset(left, y(threshold)), Offset(right, y(threshold)), 1.5.dp.toPx(),
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx())),
+                )
+            }
+            if (shown.temp) trace(segments, lineColor, 2f, { x(it.epochS) }, { y(it.value) })
             if (shown.avg && average.size >= 2) {
                 // The rolling mean is smooth by construction; one path, broken only
                 // where the record (and so the mean) has a hole.
@@ -145,7 +158,7 @@ fun TrendChart(
             }
         }
         if (shown.temp) {
-            Text("min ${StatusText.temp(temps.min())}°", color = CoolerColors.Muted, style = MaterialTheme.typography.labelSmall)
+            Text("min ${StatusText.temp(temps.min())}$unit", color = CoolerColors.Muted, style = MaterialTheme.typography.labelSmall)
         }
     }
 }

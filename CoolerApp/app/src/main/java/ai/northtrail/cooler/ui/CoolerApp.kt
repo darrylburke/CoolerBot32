@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -31,12 +32,14 @@ private data class Tab(val label: String, val icon: ImageVector)
 private val tabs = listOf(
     Tab("Status", Icons.Filled.AcUnit),
     Tab("Settings", Icons.Filled.Tune),
+    Tab("Humidity", Icons.Filled.WaterDrop),
     Tab("Detail", Icons.Filled.Info),
 )
 
 @Composable
 fun CoolerApp(viewModel: CoolerViewModel) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val dehum by viewModel.dehum.collectAsStateWithLifecycle()
     val setup by viewModel.setup.collectAsStateWithLifecycle()
     val brokerConfig by viewModel.brokerConfig.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
@@ -47,6 +50,12 @@ fun CoolerApp(viewModel: CoolerViewModel) {
         ui.message?.let {
             snackbar.showSnackbar(it)
             viewModel.consumeMessage()
+        }
+    }
+    LaunchedEffect(dehum.message) {
+        dehum.message?.let {
+            snackbar.showSnackbar(it)
+            viewModel.consumeDehumMessage()
         }
     }
 
@@ -81,6 +90,13 @@ fun CoolerApp(viewModel: CoolerViewModel) {
             when (tab) {
                 0 -> StatusScreen(ui, nowEpochS)
                 1 -> SettingsScreen(ui, viewModel::stepSetting, viewModel::chooseSetting, viewModel::enterSetting)
+                2 -> HumidityScreen(
+                    ui = dehum,
+                    nowEpochS = nowEpochS,
+                    onMode = viewModel::setDehumMode,
+                    onStep = viewModel::stepDehumSetting,
+                    onEnter = viewModel::enterDehumSetting,
+                )
                 else -> DetailScreen(
                     ui = ui,
                     brokerHost = brokerConfig.host,

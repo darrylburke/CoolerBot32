@@ -134,7 +134,7 @@ fun StatusScreen(ui: UiState, nowEpochS: Long, modifier: Modifier = Modifier) {
 
 /** A pill that reads as selected (filled, in [onColor]) or not (outlined, muted). */
 @Composable
-private fun ToggleChip(text: String, on: Boolean, onColor: Color, onClick: () -> Unit) {
+internal fun ToggleChip(text: String, on: Boolean, onColor: Color, onClick: () -> Unit) {
     Text(
         text,
         color = if (on) onColor else CoolerColors.Muted,
