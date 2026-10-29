@@ -1,4 +1,4 @@
-// Regenerates cooler-history.json from history.js. Run: node nodered/build-flow.mjs
+// Regenerates cooler-history.json from history.js and dehum-history.json from dehum-history.js. Run: node nodered/build-flow.mjs
 // The broker node carries no credentials: set the login after importing.
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -31,3 +31,23 @@ const nodes = [
 ];
 
 writeFileSync(new URL('cooler-history.json', here), JSON.stringify(nodes, null, 4) + '\n');
+
+// The dehumidifier's flow: its own tab, the same broker node (same id, so importing it
+// after the cooler flow reuses that login).
+const dfunc = readFileSync(new URL('dehum-history.js', here), 'utf8');
+const dtab = 'c001e70000000011', dfn = 'c001e70000000012', dout = 'c001e70000000013';
+const dIn = (id, topic, datatype, y) => ({ ...mqttIn(id, topic, datatype, y), z: dtab, wires: [[dfn]] });
+const brokerNode = nodes.find((n) => n.id === broker);
+const dnodes = [
+  { id: dtab, type: 'tab', label: 'Dehumidifier history', disabled: false,
+    info: '24 h of dehum/data in one-minute slots, republished on dehum/history (not retained). See nodered/README.md.' },
+  dIn('c001e70000000014', 'dehum/data', 'auto-detect', 100),
+  dIn('c001e70000000015', 'dehum/availability', 'utf8', 160),
+  { id: dfn, type: 'function', z: dtab, name: 'dehum history', func: dfunc, outputs: 1, timeout: 0, noerr: 0,
+    initialize: '', finalize: '', libs: [], x: 420, y: 130, wires: [[dout]] },
+  { id: dout, type: 'mqtt out', z: dtab, name: 'dehum/history', topic: 'dehum/history', qos: '0',
+    retain: 'false', respTopic: '', contentType: '', userProps: '', correl: '', expiry: '',
+    broker, x: 640, y: 130, wires: [] },
+  brokerNode,
+];
+writeFileSync(new URL('dehum-history.json', here), JSON.stringify(dnodes, null, 4) + '\n');

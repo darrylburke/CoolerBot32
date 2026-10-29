@@ -1,5 +1,8 @@
 # Node-RED: 24-hour history
 
+Two flows, same pattern: `cooler-history.json` (below) and `dehum-history.json`
+(the dehumidifier, at the end).
+
 `cooler-history.json` keeps the last 24 hours of `cooler/data` (box temperature, humidity,
 relay) in one-minute slots and republishes the whole window on `cooler/history` after every
 live `cooler/data`. The app and the wall panel merge it into their trend, so they show a full
@@ -35,4 +38,24 @@ Add `topic read cooler/history` to the panel's and the app's logins.
 ## Editing
 
 The Function node's code is `history.js`. After changing it run
-`node nodered/build-flow.mjs && node --test nodered/test/`, then re-import.
+`node nodered/build-flow.mjs && node --test nodered/test/*.mjs`, then re-import.
+(`dehum-history.js` likewise; the build writes both flow files.)
+
+## Dehumidifier history
+
+`dehum-history.json` keeps 24 h of `dehum/data` (humidity, temperature, relay) in
+one-minute slots and republishes it on `dehum/history` (not retained) after every live
+`dehum/data`, as `{"v":1,"t0":…,"interval_s":60,"hum":[…],"temp":[…],"relay":[…]}`.
+The app's Humidity tab merges it into its graph.
+
+Install: Menu → Import → `dehum-history.json`. It uses the same broker config node
+(same id) as the cooler flow, so Node-RED offers to keep the existing one: keep it.
+Deploy. Within 30 s, `mosquitto_sub -t dehum/history -C 1` shows a message.
+
+Add to Node-RED's login:
+
+    topic read dehum/data
+    topic read dehum/availability
+    topic write dehum/history
+
+and `topic read dehum/history` to the panel's and the app's logins.
