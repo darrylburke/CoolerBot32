@@ -2,6 +2,7 @@ package ai.northtrail.cooler
 
 import ai.northtrail.cooler.data.message
 import ai.northtrail.cooler.model.BrokerConfig
+import ai.northtrail.cooler.model.DehumMode
 import ai.northtrail.cooler.model.Topics
 import ai.northtrail.cooler.ui.SetupUi
 import android.app.Application
@@ -26,6 +27,15 @@ class CoolerViewModel(application: Application) : AndroidViewModel(application) 
     ).also { it.start() }
 
     val ui: StateFlow<UiState> = controller.ui
+
+    private val dehumController = DehumController(
+        transport = app.repository,
+        scope = viewModelScope,
+        clock = System::currentTimeMillis,
+        onIgnored = { Log.w(TAG, it) },
+    ).also { it.start() }
+
+    val dehum: StateFlow<DehumUi> = dehumController.ui
 
     private val setupState = MutableStateFlow(SetupUi())
     val setup: StateFlow<SetupUi> = setupState.asStateFlow()
@@ -63,6 +73,11 @@ class CoolerViewModel(application: Application) : AndroidViewModel(application) 
     fun abortCalibration() = controller.abortCalibration()
     fun resetFinCal() = controller.resetFinCal()
     fun consumeMessage() = controller.consumeMessage()
+
+    fun setDehumMode(m: DehumMode) = dehumController.setMode(m)
+    fun stepDehumSetting(key: String, direction: Int) = dehumController.stepSetting(key, direction)
+    fun enterDehumSetting(key: String, value: Int) { dehumController.enterSetting(key, value) }
+    fun consumeDehumMessage() = dehumController.consumeMessage()
 
     private companion object {
         const val TAG = "Cooler"
