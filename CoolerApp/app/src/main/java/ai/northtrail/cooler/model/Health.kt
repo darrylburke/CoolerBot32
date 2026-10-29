@@ -6,6 +6,8 @@ data class LinkStatus(
     val state: LinkState = LinkState.DISCONNECTED,
     val detail: String = "",
     val connectedAtMillis: Long? = null,
+    /** Optional topics the broker refused this session (e.g. `dehum/data` without the ACL line). */
+    val refused: Set<String> = emptySet(),
 )
 
 enum class LinkView { CONNECTING, REJECTED, TLS_FAILED, UNREACHABLE, WAITING, CONTROLLER_OFFLINE, SILENT, ONLINE }

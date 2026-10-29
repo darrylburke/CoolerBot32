@@ -50,7 +50,7 @@ object BrokerProbe {
             clientId = clientId,
             trustManagerFactory = trust,
             subscriptions = topics.subscriptions,
-            onLink = { state, detail, _ ->
+            onLink = { state, detail, _, _ ->
                 when (state) {
                     LinkState.CONNECTED -> subscribed.set(true)
                     LinkState.REJECTED -> result.complete(ProbeResult.LoginRefused)

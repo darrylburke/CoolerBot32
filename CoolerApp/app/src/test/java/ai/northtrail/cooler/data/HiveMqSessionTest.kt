@@ -13,6 +13,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 class HiveMqSessionTest {
     private val links = CopyOnWriteArrayList<LinkState>()
     private val messages = CopyOnWriteArrayList<IncomingMessage>()
+    private val refused = CopyOnWriteArrayList<Set<String>>()
 
     private fun session(port: Int, topics: Topics = Topics()) = HiveMqSession(
         host = "127.0.0.1",
@@ -23,7 +24,7 @@ class HiveMqSessionTest {
         trustManagerFactory = null,
         subscriptions = topics.subscriptions,
         optionalSubscriptions = topics.optionalSubscriptions,
-        onLink = { state, _, _ -> links += state },
+        onLink = { state, _, _, r -> links += state; refused += r },
         onMessage = { messages += it },
     )
 
@@ -35,7 +36,11 @@ class HiveMqSessionTest {
             waitUntil { LinkState.CONNECTED in links }
             s.stop()
             assertTrue("links seen: $links", LinkState.CONNECTED in links)
-            assertEquals(listOf("cooler/data", "cooler/availability", "cooler/history"), broker.subscribedTopics.toList())
+            assertEquals(
+                listOf("cooler/data", "cooler/availability", "cooler/history", "dehum/data", "dehum/availability", "dehum/history"),
+                broker.subscribedTopics.toList(),
+            )
+            assertEquals(emptySet<String>(), refused.last())
         }
     }
 
@@ -46,7 +51,21 @@ class HiveMqSessionTest {
             s.start()
             waitUntil { LinkState.CONNECTED in links }
             s.stop()
+            assertTrue("links seen: $links", LinkState.CONNECTED in links)
             assertFalse("links seen: $links", LinkState.REJECTED in links)
+        }
+    }
+
+    @Test
+    fun refusedDehumidifierDataIsReportedNotFatal() {
+        FakeBroker(refuse = setOf("dehum/data")).use { broker ->
+            val s = session(broker.port)
+            s.start()
+            waitUntil { LinkState.CONNECTED in links }
+            s.stop()
+            assertFalse("links seen: $links", LinkState.REJECTED in links)
+            assertTrue("links seen: $links", LinkState.CONNECTED in links)
+            assertEquals(setOf("dehum/data"), refused[links.indexOf(LinkState.CONNECTED)])
         }
     }
 
@@ -57,6 +76,7 @@ class HiveMqSessionTest {
             s.start()
             waitUntil { LinkState.REJECTED in links }
             s.stop()
+            assertTrue("links seen: $links", LinkState.REJECTED in links)
             assertFalse("links seen: $links", LinkState.CONNECTED in links)
         }
     }

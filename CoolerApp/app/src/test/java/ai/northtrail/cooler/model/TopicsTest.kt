@@ -25,6 +25,9 @@ class TopicsTest {
 
     @Test
     fun historyIsAnOptionalSubscription() {
-        assertEquals(listOf("barn/history"), Topics("barn").optionalSubscriptions)
+        assertEquals(
+            listOf("barn/history", "dehum/data", "dehum/availability", "dehum/history"),
+            Topics("barn").optionalSubscriptions,
+        )
     }
 }

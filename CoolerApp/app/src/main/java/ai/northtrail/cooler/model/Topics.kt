@@ -12,6 +12,9 @@ class Topics(base: String = "cooler") {
     /** Exact topics only: the broker login may read nothing else. A refusal of these is fatal. */
     val subscriptions: List<String> = listOf(data, availability)
 
-    /** Wanted but not needed: a broker ACL without `history` refuses it, and the app works on without. */
-    val optionalSubscriptions: List<String> = listOf(history)
+    /**
+     * Wanted but not needed: a broker ACL without `history` or the dehumidifier's topics
+     * refuses them, and the app works on without.
+     */
+    val optionalSubscriptions: List<String> = listOf(history) + DehumTopics.subscriptions
 }

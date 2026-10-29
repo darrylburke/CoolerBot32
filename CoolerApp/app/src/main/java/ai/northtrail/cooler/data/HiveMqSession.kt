@@ -9,10 +9,12 @@ import com.hivemq.client.mqtt.mqtt3.Mqtt3AsyncClient
 import com.hivemq.client.mqtt.mqtt3.Mqtt3Client
 import com.hivemq.client.mqtt.mqtt3.exceptions.Mqtt3ConnAckException
 import com.hivemq.client.mqtt.mqtt3.message.connect.connack.Mqtt3ConnAckReturnCode
+import com.hivemq.client.mqtt.mqtt3.exceptions.Mqtt3SubAckException
 import com.hivemq.client.mqtt.mqtt3.message.subscribe.Mqtt3Subscribe
 import com.hivemq.client.mqtt.mqtt3.message.subscribe.Mqtt3Subscription
 import com.hivemq.client.mqtt.mqtt3.message.subscribe.suback.Mqtt3SubAckReturnCode
 import java.security.cert.CertificateException
+import java.util.concurrent.CompletionException
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLHandshakeException
 import javax.net.ssl.SSLPeerUnverifiedException
@@ -31,7 +33,8 @@ class HiveMqSession(
     trustManagerFactory: TrustManagerFactory?,
     private val subscriptions: List<String>,
     private val optionalSubscriptions: List<String> = emptyList(),
-    private val onLink: (LinkState, String, Long?) -> Unit,
+    /** State, detail, connected-at, and the optional topics the broker refused (CONNECTED only). */
+    private val onLink: (LinkState, String, Long?, Set<String>) -> Unit,
     private val onMessage: (IncomingMessage) -> Unit,
 ) {
     @Volatile private var stopped = false
@@ -66,9 +69,9 @@ class HiveMqSession(
                     // Wrong password, ACL or certificate: retrying only hammers the broker.
                     stopped = true
                     context.reconnector.reconnect(false)
-                    onLink(fatal.first, fatal.second, null)
+                    onLink(fatal.first, fatal.second, null, emptySet())
                 } else {
-                    onLink(LinkState.DISCONNECTED, "Connection lost | retrying", null)
+                    onLink(LinkState.DISCONNECTED, "Connection lost | retrying", null, emptySet())
                 }
             }
             .buildAsync()
@@ -87,7 +90,7 @@ class HiveMqSession(
     val clientState: MqttClientState get() = client.state
 
     fun start() {
-        onLink(LinkState.CONNECTING, "Connecting with TLS", null)
+        onLink(LinkState.CONNECTING, "Connecting with TLS", null, emptySet())
         client.connectWith()
             .cleanSession(true)
             .keepAlive(30)
@@ -99,8 +102,8 @@ class HiveMqSession(
             .whenComplete { _, error ->
                 if (stopped || error == null) return@whenComplete
                 val fatal = fatal(error)
-                if (fatal != null) onLink(fatal.first, fatal.second, null)
-                else onLink(LinkState.DISCONNECTED, "Connect failed: ${safeMessage(error)}", null)
+                if (fatal != null) onLink(fatal.first, fatal.second, null, emptySet())
+                else onLink(LinkState.DISCONNECTED, "Connect failed: ${safeMessage(error)}", null, emptySet())
             }
     }
 
@@ -112,14 +115,21 @@ class HiveMqSession(
             .build()
         client.subscribe(request).whenComplete { ack, error ->
             if (stopped) return@whenComplete
+            // A SUBACK with any failure code arrives as an error carrying that SUBACK.
+            val cause = (error as? CompletionException)?.cause ?: error
+            val codes = ack?.returnCodes ?: (cause as? Mqtt3SubAckException)?.mqttMessage?.returnCodes
             when {
-                error != null ->
-                    onLink(LinkState.DISCONNECTED, "Subscription failed: ${safeMessage(error)}", null)
+                codes == null ->
+                    onLink(LinkState.DISCONNECTED, "Subscription failed: ${safeMessage(cause ?: error)}", null, emptySet())
                 // Required topics come first in the SUBACK; a refused optional one is not fatal.
-                ack.returnCodes.take(subscriptions.size).any { it == Mqtt3SubAckReturnCode.FAILURE } ->
-                    onLink(LinkState.REJECTED, "Broker refused the subscription (check the ACL)", null)
-                else ->
-                    onLink(LinkState.CONNECTED, "Connected | TLS", System.currentTimeMillis())
+                codes.take(subscriptions.size).any { it == Mqtt3SubAckReturnCode.FAILURE } ->
+                    onLink(LinkState.REJECTED, "Broker refused the subscription (check the ACL)", null, emptySet())
+                else -> {
+                    val refused = optionalSubscriptions.filterIndexed { i, _ ->
+                        codes.getOrNull(subscriptions.size + i) == Mqtt3SubAckReturnCode.FAILURE
+                    }.toSet()
+                    onLink(LinkState.CONNECTED, "Connected | TLS", System.currentTimeMillis(), refused)
+                }
             }
         }
     }

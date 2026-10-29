@@ -86,7 +86,7 @@ class MqttRepository(
             subscriptions = Topics(config.base).subscriptions,
             optionalSubscriptions = Topics(config.base).optionalSubscriptions,
             // A superseded session must never overwrite the current link state.
-            onLink = { state, detail, at -> setLinkFrom(created, config, state, detail, at) },
+            onLink = { state, detail, at, refused -> setLinkFrom(created, config, state, detail, at, refused) },
             onMessage = { if (session === created) mutableMessages.tryEmit(it) },
         )
         session = created
@@ -118,9 +118,10 @@ class MqttRepository(
         state: LinkState,
         detail: String,
         connectedAt: Long?,
+        refused: Set<String>,
     ) {
         if (session !== source) return
-        val status = LinkStatus(state, detail, connectedAt)
+        val status = LinkStatus(state, detail, connectedAt, refused)
         if (state == LinkState.REJECTED || state == LinkState.TLS_FAILED) gate.recordFatal(config, status)
         mutableLink.value = status
     }
