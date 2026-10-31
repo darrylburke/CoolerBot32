@@ -19,7 +19,8 @@ struct Rig {
     explicit Rig(Settings s0 = Settings{}, bool connected = true, uint32_t start = 1000)
         : s(s0), now(start) {
         in.mqtt_connected = connected;
-        in.rh = 70.0f;        // humid unless a test says otherwise
+        in.rh = 50.0f;        // dry and mild: no default rule matches
+        in.temp = 5.0f;
         in.rh_age_ms = 0;
         o = step(in, s, st, now);
     }
@@ -34,13 +35,19 @@ struct Rig {
 
 Cmd mode_cmd(Mode m) { Cmd c; c.mode = m; return c; }
 
+// A settings record with every rule disabled except the ones a test sets.
+Settings no_rules(int min_run = 0) {
+    Settings s; s.min_run = min_run;
+    for (Rule& r : s.rules) r.en = 0;
+    return s;
+}
+
 }  // namespace
 
 TEST_CASE("clamp_settings bounds") {
     struct B { int Settings::*f; int lo, hi; };
     const B bounds[] = {
         {&Settings::min_run, 0, 60}, {&Settings::timer_min, 1, 1440}, {&Settings::cycle_off, 1, 240},
-        {&Settings::dehum_rh, 30, 95},
     };
     for (auto b : bounds) {
         Settings s; s.*b.f = b.lo - 1; clamp_settings(s); CHECK(s.*b.f == b.lo);
@@ -116,52 +123,6 @@ TEST_CASE("on / off") {
     CHECK(r.o.hold_s == 0);
 }
 
-TEST_CASE("auto follows fresh want") {
-    Settings s; s.min_run = 0;
-    Rig r(s);
-    CHECK(r.o.want == -1);
-    CHECK_FALSE(r.o.relay);
-    on_want(r.st, true);
-    r.tick();
-    CHECK(r.o.relay);
-    CHECK(r.o.want == 1);
-    on_want(r.st, false);
-    r.tick();
-    CHECK_FALSE(r.o.relay);
-    CHECK(r.o.want == 0);
-    on_want(r.st, true);
-    r.tick();                 // want 1 s old
-    r.run(88 * 1000);         // 89 s
-    CHECK(r.o.relay);
-    r.run(2 * 1000);          // 91 s
-    CHECK_FALSE(r.o.relay);
-    CHECK(r.o.want == -1);
-}
-
-TEST_CASE("min_run holds through want drop") {
-    Rig r;                    // min_run 10
-    on_want(r.st, true);
-    r.tick();
-    REQUIRE(r.o.relay);       // closed on this tick
-    int k = 0;
-    auto run_want = [&](bool w, int ticks) {
-        for (int i = 0; i < ticks; i++) {
-            if (k % 30 == 0) on_want(r.st, w);
-            r.tick(); k++;
-        }
-    };
-    run_want(true, 120);
-    k = 0;
-    run_want(false, 479);     // 599 s after closing
-    CHECK(r.o.want == 0);
-    CHECK(r.o.relay);
-    CHECK(r.o.hold_s == 1);
-    on_want(r.st, false);
-    r.tick();                 // 600 s
-    CHECK_FALSE(r.o.relay);
-    CHECK(r.o.hold_s == 0);
-}
-
 TEST_CASE("cycle phases") {
     Settings s; s.cycle_on = 20; s.cycle_off = 40; s.min_run = 10;
     Rig r(s);
@@ -233,17 +194,6 @@ TEST_CASE("timer counts through broker loss") {
     CHECK(r.o.remain_s == 299);
 }
 
-TEST_CASE("want remembered across modes") {
-    Settings s; s.min_run = 0;
-    Rig r(s);
-    r.cmd(mode_cmd(Mode::On));
-    on_want(r.st, true);
-    r.run(30 * 1000);
-    CHECK(r.cmd(mode_cmd(Mode::Auto)).relay);
-    on_want(r.st, false);
-    CHECK_FALSE(r.tick().relay);
-}
-
 TEST_CASE("timers survive millis wrap and late ticks") {
     Settings s; s.timer_min = 60;
     Rig r(s, true, UINT32_MAX - 30000u);
@@ -265,84 +215,6 @@ TEST_CASE("publish_now on changes") {
     CHECK_FALSE(r.tick().publish_now);
 }
 
-TEST_CASE("broker loss forgets the last want") {
-    Rig r;                                            // AUTO, min_run 10
-    on_want(r.st, true);
-    REQUIRE(r.tick().relay);
-    r.run(15 * 60 * 1000);                            // past min_run (want goes stale, relay off)
-    on_want(r.st, true);
-    REQUIRE(r.tick().relay);
-    r.run(10 * 60 * 1000);                            // hold over; keep want fresh below
-    on_want(r.st, true);
-    REQUIRE(r.tick().relay);
-    r.in.mqtt_connected = false;
-    r.run(75 * 1000);                                 // lockout at 60 s
-    CHECK_FALSE(r.o.relay);
-    r.in.mqtt_connected = true;
-    r.tick();                                         // want is 76 s old but predates the outage
-    CHECK_FALSE(r.o.relay);
-    CHECK(r.o.want == -1);
-    on_want(r.st, true);                              // the Cooler's next message
-    CHECK(r.tick().relay);
-}
-
-TEST_CASE("dehum_rh default") { CHECK(Settings{}.dehum_rh == 65); }
-
-TEST_CASE("auto needs local humidity") {
-    Settings s; s.min_run = 0;
-    Rig r(s);
-    r.in.rh = 60.0f;
-    on_want(r.st, true);
-    r.tick();
-    CHECK_FALSE(r.o.relay);
-    CHECK_FALSE(r.o.humid);
-    r.in.rh = 66.0f;
-    r.tick();
-    CHECK(r.o.relay);
-    CHECK(r.o.humid);
-    on_want(r.st, false);                              // AC cooling
-    CHECK_FALSE(r.tick().relay);
-    CHECK(r.o.humid);
-}
-
-TEST_CASE("local rh hysteresis") {
-    Settings s; s.min_run = 0;
-    Rig r(s);
-    r.in.rh = 50.0f;                                   // start dry: the rig boots at 70 %
-    r.tick();
-    auto at = [&](float rh) { r.in.rh = rh; on_want(r.st, true); return r.tick().relay; };
-    CHECK_FALSE(at(64.9f));
-    CHECK(at(65.0f));
-    CHECK(at(62.1f));
-    CHECK_FALSE(at(61.9f));
-    CHECK_FALSE(at(64.0f));
-}
-
-TEST_CASE("stale or missing rh blocks auto") {
-    Settings s; s.min_run = 0;
-    Rig r(s);
-    on_want(r.st, true);
-    REQUIRE(r.tick().relay);
-    r.in.rh_age_ms = 29000;
-    CHECK(r.tick().relay);
-    r.in.rh_age_ms = 30000;
-    CHECK_FALSE(r.tick().relay);
-    CHECK_FALSE(r.o.humid);
-    r.in.rh_age_ms = 0;
-    r.in.rh = NAN;
-    CHECK_FALSE(r.tick().relay);
-    r.in.rh = 63.0f;                                   // latch was cleared: 63 is not humid
-    CHECK_FALSE(r.tick().relay);
-}
-
-TEST_CASE("on, timer and cycle ignore rh") {
-    Rig r;
-    r.in.rh = NAN;
-    CHECK(r.cmd(mode_cmd(Mode::On)).relay);
-    CHECK(r.cmd(mode_cmd(Mode::Timer)).relay);
-    CHECK(r.cmd(mode_cmd(Mode::Cycle)).relay);
-}
-
 TEST_CASE("timer takes whole minutes, default 120") {
     CHECK(Settings{}.timer_min == 120);
     Settings s; s.timer_min = 45;
@@ -354,4 +226,389 @@ TEST_CASE("timer takes whole minutes, default 120") {
     r.run(1000);
     CHECK_FALSE(r.o.relay);
     CHECK(r.o.mode == Mode::Auto);
+}
+
+TEST_CASE("rule defaults") {
+    const Settings s;
+    const Rule r1{1, 1, 1, 65, 1, 1}, r2{0, 1, 0, 55, 1, 0}, r3{0, 0, 1, 10, 2, 1}, r4{0, 0, 0, 2, 2, 1};
+    CHECK(s.rules[0] == r1);
+    CHECK(s.rules[1] == r2);
+    CHECK(s.rules[2] == r3);
+    CHECK(s.rules[3] == r4);
+    CHECK(s.mode == Mode::Auto);
+    Settings c = s; clamp_settings(c);
+    for (int i = 0; i < NUM_RULES; i++) CHECK(c.rules[i] == s.rules[i]);
+}
+
+TEST_CASE("rule clamping") {
+    struct B { int Rule::*f; int lo, hi; };
+    const B bounds[] = {
+        {&Rule::en, 0, 1}, {&Rule::sensor, 0, 1}, {&Rule::cmp, 0, 1}, {&Rule::relay, 1, 2}, {&Rule::action, 0, 1},
+    };
+    for (auto b : bounds) {
+        Rule r; r.*b.f = b.lo - 1; clamp_rule(r); CHECK(r.*b.f == b.lo);
+        r = Rule{}; r.*b.f = b.hi + 1; clamp_rule(r); CHECK(r.*b.f == b.hi);
+        r = Rule{}; r.*b.f = b.hi; clamp_rule(r); CHECK(r.*b.f == b.hi);
+    }
+    Rule t; t.sensor = 0;
+    t.value = -21; clamp_rule(t); CHECK(t.value == -20);
+    t.value = 51; clamp_rule(t); CHECK(t.value == 50);
+    t.value = -20; clamp_rule(t); CHECK(t.value == -20);
+    Rule h; h.sensor = 1;
+    h.value = -1; clamp_rule(h); CHECK(h.value == 0);
+    h.value = 101; clamp_rule(h); CHECK(h.value == 100);
+    h.value = 100; clamp_rule(h); CHECK(h.value == 100);
+
+    // Changing the sensor re-clamps the value to the new sensor's range.
+    Settings s; State st;
+    Cmd c; c.rules[0].sensor = 0;                      // r1 was humidity 65
+    CHECK(apply_cmd(c, s, st));
+    CHECK(s.rules[0].sensor == 0);
+    CHECK(s.rules[0].value == 50);
+    Cmd d; d.rules[3].value = -20; d.rules[3].sensor = 1; // value and sensor in one message
+    CHECK(apply_cmd(d, s, st));
+    CHECK(s.rules[3].value == 0);
+}
+
+TEST_CASE("humidity above: 3 %RH band") {
+    Settings s = no_rules();
+    s.rules[0] = {1, 1, 1, 65, 1, 1};
+    Rig r(s);
+    auto at = [&](float rh) { r.in.rh = rh; r.tick(); return r.o.match[0]; };
+    CHECK_FALSE(at(64.9f));
+    CHECK(at(65.0f));
+    CHECK(r.o.relay);
+    CHECK(at(62.1f));
+    CHECK(at(62.0f));
+    CHECK_FALSE(at(61.9f));
+    CHECK_FALSE(r.o.relay);
+    CHECK_FALSE(at(64.0f));
+}
+
+TEST_CASE("humidity below: 3 %RH band") {
+    Settings s = no_rules();
+    s.rules[1] = {1, 1, 0, 40, 1, 1};
+    Rig r(s);
+    auto at = [&](float rh) { r.in.rh = rh; r.tick(); return r.o.match[1]; };
+    CHECK_FALSE(at(40.1f));
+    CHECK(at(40.0f));
+    CHECK(at(43.0f));
+    CHECK_FALSE(at(43.1f));
+    CHECK_FALSE(at(41.0f));
+}
+
+TEST_CASE("temperature above: 1 degC band") {
+    Settings s = no_rules();
+    s.rules[2] = {1, 0, 1, 10, 2, 1};
+    Rig r(s);
+    auto at = [&](float t) { r.in.temp = t; r.tick(); return r.o.match[2]; };
+    CHECK_FALSE(at(9.9f));
+    CHECK(at(10.0f));
+    CHECK(r.o.relay2);
+    CHECK_FALSE(r.o.relay);
+    CHECK(at(9.0f));
+    CHECK_FALSE(at(8.9f));
+    CHECK_FALSE(r.o.relay2);
+    CHECK_FALSE(at(9.5f));
+}
+
+TEST_CASE("temperature below: 1 degC band, negative values") {
+    Settings s = no_rules();
+    s.rules[3] = {1, 0, 0, -5, 2, 1};
+    Rig r(s);
+    auto at = [&](float t) { r.in.temp = t; r.tick(); return r.o.match[3]; };
+    CHECK_FALSE(at(-4.9f));
+    CHECK(at(-5.0f));
+    CHECK(at(-4.0f));
+    CHECK_FALSE(at(-3.9f));
+    CHECK_FALSE(at(-4.5f));
+}
+
+TEST_CASE("stale or NaN reading: no match, latch cleared") {
+    Settings s = no_rules();
+    s.rules[0] = {1, 1, 1, 65, 1, 1};
+    s.rules[2] = {1, 0, 1, 10, 2, 1};
+    Rig r(s);
+    r.in.rh = 70.0f; r.in.temp = 12.0f;
+    r.tick();
+    REQUIRE(r.o.match[0]);
+    REQUIRE(r.o.match[2]);
+    r.in.rh_age_ms = 29999;
+    CHECK(r.tick().match[0]);
+    r.in.rh_age_ms = 30000;                            // both readings come from the HDC1080
+    r.tick();
+    CHECK_FALSE(r.o.match[0]);
+    CHECK_FALSE(r.o.match[2]);
+    CHECK_FALSE(r.o.rh_valid);
+    CHECK_FALSE(r.o.temp_valid);
+    CHECK_FALSE(r.o.relay);
+    CHECK_FALSE(r.o.relay2);
+    r.in.rh_age_ms = 0;
+    r.in.rh = 63.0f;                                   // inside the band, but the latch was cleared
+    r.in.temp = 9.5f;
+    r.tick();
+    CHECK_FALSE(r.o.match[0]);
+    CHECK_FALSE(r.o.match[2]);
+    r.in.rh = 70.0f; r.in.temp = 12.0f;
+    r.tick();
+    REQUIRE(r.o.match[0]);
+    r.in.rh = NAN;                                     // humidity NaN, temperature fine
+    r.tick();
+    CHECK_FALSE(r.o.match[0]);
+    CHECK(r.o.match[2]);
+    CHECK_FALSE(r.o.rh_valid);
+    CHECK(r.o.temp_valid);
+}
+
+TEST_CASE("disabled rule never matches") {
+    Settings s = no_rules();
+    s.rules[0] = {0, 1, 1, 65, 1, 1};
+    Rig r(s);
+    r.in.rh = 90.0f;
+    r.tick();
+    CHECK_FALSE(r.o.match[0]);
+    CHECK_FALSE(r.o.relay);
+    Cmd c; c.rules[0].en = 1;
+    CHECK(r.cmd(c).match[0]);
+    CHECK(r.o.relay);
+    Cmd d; d.rules[0].en = 0;
+    CHECK_FALSE(r.cmd(d).match[0]);
+    CHECK_FALSE(r.o.relay);
+}
+
+TEST_CASE("off wins") {
+    Settings s = no_rules();
+    s.rules[0] = {1, 1, 1, 60, 1, 1};                 // humid -> relay 1 on
+    s.rules[1] = {1, 0, 0, 2, 1, 0};                  // cold -> relay 1 off
+    Rig r(s);
+    r.in.rh = 70.0f; r.in.temp = 5.0f;
+    CHECK(r.tick().relay);
+    r.in.temp = 1.0f;                                  // both match
+    r.tick();
+    CHECK(r.o.match[0]);
+    CHECK(r.o.match[1]);
+    CHECK_FALSE(r.o.relay);
+    // An off rule alone with no on rule: still off.
+    r.in.rh = 50.0f;
+    CHECK_FALSE(r.tick().relay);
+    // Rules for the other relay do not interfere.
+    Settings t = no_rules();
+    t.rules[0] = {1, 1, 1, 60, 1, 1};
+    t.rules[1] = {1, 1, 1, 60, 2, 0};
+    Rig q(t);
+    q.in.rh = 70.0f;
+    q.tick();
+    CHECK(q.o.relay);
+    CHECK_FALSE(q.o.relay2);
+}
+
+TEST_CASE("relay 2 only in AUTO") {
+    Settings s = no_rules();
+    s.rules[2] = {1, 0, 1, 10, 2, 1};
+    Rig r(s);
+    r.in.temp = 15.0f;
+    REQUIRE(r.tick().relay2);
+    CHECK_FALSE(r.o.relay);
+    for (Mode m : {Mode::On, Mode::Timer, Mode::Cycle}) {
+        r.cmd(mode_cmd(Mode::Auto));
+        REQUIRE(r.o.relay2);
+        r.cmd(mode_cmd(m));
+        CHECK(r.o.relay);
+        CHECK_FALSE(r.o.relay2);
+        CHECK(r.o.match[2]);                           // still judged, just not acted on
+    }
+    // ON / TIMER / CYCLE ignore the rules for relay 1 too.
+    Settings t = no_rules();
+    t.rules[1] = {1, 1, 1, 0, 1, 0};                  // humidity >= 0 -> relay 1 off, always
+    Rig q(t);
+    CHECK(q.cmd(mode_cmd(Mode::On)).relay);
+    q.in.rh = NAN;
+    CHECK(q.tick().relay);
+}
+
+TEST_CASE("OFF turns both off at once") {
+    Settings s = no_rules(10);
+    s.rules[0] = {1, 1, 1, 60, 1, 1};
+    s.rules[2] = {1, 0, 1, 10, 2, 1};
+    Rig r(s);
+    r.in.rh = 70.0f; r.in.temp = 15.0f;
+    r.tick();
+    REQUIRE(r.o.relay);
+    REQUIRE(r.o.relay2);
+    CHECK(r.o.hold_s > 0);
+    CHECK(r.o.hold2_s > 0);
+    r.cmd(mode_cmd(Mode::Off));
+    CHECK_FALSE(r.o.relay);
+    CHECK_FALSE(r.o.relay2);
+    CHECK(r.o.hold_s == 0);
+    CHECK(r.o.hold2_s == 0);
+}
+
+TEST_CASE("min_run holds each relay on its own") {
+    Settings s = no_rules(10);
+    s.rules[0] = {1, 1, 1, 60, 1, 1};
+    s.rules[2] = {1, 0, 1, 10, 2, 1};
+    Rig r(s);
+    r.in.rh = 70.0f;
+    r.tick();                                          // relay 1 closes at t = 0
+    REQUIRE(r.o.relay);
+    CHECK(r.o.hold_s == 600);
+    CHECK_FALSE(r.o.relay2);
+    CHECK(r.o.hold2_s == 0);
+    r.run(120 * 1000);
+    r.in.temp = 15.0f;
+    r.tick();                                          // relay 2 closes at t = 121 s
+    REQUIRE(r.o.relay2);
+    CHECK(r.o.hold2_s == 600);
+    CHECK(r.o.hold_s == 479);
+    r.in.rh = 50.0f; r.in.temp = 5.0f;                 // neither wanted any more
+    r.run(478 * 1000);                                 // t = 599
+    CHECK(r.o.relay);
+    CHECK(r.o.hold_s == 1);
+    r.tick();                                          // t = 600: relay 1 released
+    CHECK_FALSE(r.o.relay);
+    CHECK(r.o.relay2);
+    CHECK(r.o.hold2_s == 121);
+    r.run(120 * 1000);
+    CHECK(r.o.relay2);
+    r.tick();                                          // t = 721: relay 2 released
+    CHECK_FALSE(r.o.relay2);
+    CHECK(r.o.hold2_s == 0);
+}
+
+TEST_CASE("min_run holds relay 2 when leaving AUTO") {
+    Settings s = no_rules(10);
+    s.rules[2] = {1, 0, 1, 10, 2, 1};
+    Rig r(s);
+    r.in.temp = 15.0f;
+    REQUIRE(r.tick().relay2);
+    r.run(60 * 1000);
+    r.cmd(mode_cmd(Mode::On));
+    CHECK(r.o.relay);
+    CHECK(r.o.relay2);                                 // held: 9 min left
+    CHECK(r.o.hold2_s == 540);
+    r.run(540 * 1000);
+    CHECK_FALSE(r.o.relay2);
+}
+
+TEST_CASE("broker loss turns both off") {
+    Settings s = no_rules(10);
+    s.rules[0] = {1, 1, 1, 60, 1, 1};
+    s.rules[2] = {1, 0, 1, 10, 2, 1};
+    Rig r(s);
+    r.in.rh = 70.0f; r.in.temp = 15.0f;
+    r.tick();
+    REQUIRE(r.o.relay);
+    REQUIRE(r.o.relay2);
+    r.in.mqtt_connected = false;
+    r.run(59 * 1000);
+    CHECK(r.o.relay);
+    CHECK(r.o.relay2);
+    r.tick();
+    CHECK(r.o.link_lost);
+    CHECK_FALSE(r.o.relay);
+    CHECK_FALSE(r.o.relay2);
+    r.in.mqtt_connected = true;
+    r.tick();
+    CHECK(r.o.relay);
+    CHECK(r.o.relay2);
+}
+
+TEST_CASE("never connected: both off") {
+    Settings s = no_rules();
+    s.rules[0] = {1, 1, 1, 60, 1, 1};
+    s.rules[2] = {1, 0, 1, 10, 2, 1};
+    Rig r(s, false);
+    r.in.rh = 70.0f; r.in.temp = 15.0f;
+    r.run(5 * 60 * 1000);
+    CHECK(r.o.match[0]);
+    CHECK(r.o.match[2]);
+    CHECK_FALSE(r.o.relay);
+    CHECK_FALSE(r.o.relay2);
+    r.in.mqtt_connected = true;
+    r.tick();
+    CHECK(r.o.relay);
+    CHECK(r.o.relay2);
+}
+
+TEST_CASE("a changed rule loses its latch") {
+    Settings s = no_rules();
+    s.rules[0] = {1, 1, 1, 65, 1, 1};
+    Rig r(s);
+    r.in.rh = 66.0f;
+    REQUIRE(r.tick().match[0]);
+    r.in.rh = 63.0f;                                   // in the band: still latched
+    REQUIRE(r.tick().match[0]);
+    Cmd c; c.rules[0].relay = 2;
+    CHECK(r.cmd(c).relay2 == false);                   // re-judged from 65: 63 is not above
+    CHECK_FALSE(r.o.match[0]);
+    // Re-sending the same values is no change and keeps the latch.
+    r.in.rh = 66.0f;
+    REQUIRE(r.tick().match[0]);
+    r.in.rh = 63.0f;
+    REQUIRE(r.tick().match[0]);
+    Cmd same; same.rules[0].relay = 2; same.rules[0].value = 65;
+    State st2 = r.st; Settings s2 = r.s;
+    CHECK_FALSE(apply_cmd(same, s2, st2));
+    CHECK(st2.match[0]);
+    // A change to another rule leaves this latch alone.
+    Cmd other; other.rules[1].value = 50;
+    CHECK(apply_cmd(other, s2, st2));
+    CHECK(st2.match[0]);
+}
+
+TEST_CASE("apply_cmd: every rN key, returns changed") {
+    Settings s; State st;
+    CHECK_FALSE(apply_cmd(Cmd{}, s, st));
+    for (int i = 0; i < NUM_RULES; i++) {
+        Settings t; State u;
+        Rule want = t.rules[i];
+        Cmd c;
+        auto flip = [&](std::optional<int> RuleCmd::*cf, int Rule::*rf, int v) {
+            Cmd one; (one.rules[i].*cf) = v;
+            Settings a; State b;
+            const bool changed = apply_cmd(one, a, b);
+            CHECK(changed);
+            CHECK(a.rules[i].*rf == v);
+            (c.rules[i].*cf) = v;
+            want.*rf = v;
+        };
+        flip(&RuleCmd::en, &Rule::en, 1 - t.rules[i].en);
+        flip(&RuleCmd::cmp, &Rule::cmp, 1 - t.rules[i].cmp);
+        flip(&RuleCmd::value, &Rule::value, 7);
+        flip(&RuleCmd::relay, &Rule::relay, 3 - t.rules[i].relay);
+        flip(&RuleCmd::action, &Rule::action, 1 - t.rules[i].action);
+        flip(&RuleCmd::sensor, &Rule::sensor, 1 - t.rules[i].sensor);
+        CHECK(apply_cmd(c, t, u));
+        CHECK(t.rules[i] == want);
+        for (int j = 0; j < NUM_RULES; j++)
+            if (j != i) CHECK(t.rules[j] == Settings{}.rules[j]);
+        CHECK_FALSE(apply_cmd(c, t, u));               // same again: no change
+    }
+    // Out of range is clamped; a clamp back to the stored value is no change.
+    Settings a; State b;
+    Cmd c; c.rules[0].relay = 9;
+    CHECK(apply_cmd(c, a, b));
+    CHECK(a.rules[0].relay == 2);
+    CHECK_FALSE(apply_cmd(c, a, b));
+}
+
+TEST_CASE("publish_now on relay 2 and match changes") {
+    Settings s = no_rules();
+    s.rules[2] = {1, 0, 1, 10, 2, 1};
+    s.rules[3] = {1, 0, 0, 2, 1, 0};                  // relay 1 off: match only
+    Rig r(s);
+    CHECK_FALSE(r.tick().publish_now);
+    r.in.temp = 15.0f;
+    CHECK(r.tick().publish_now);                       // relay 2 on, r3 met
+    CHECK_FALSE(r.tick().publish_now);
+    r.in.temp = 1.0f;
+    CHECK(r.tick().publish_now);
+    CHECK(r.o.match[3]);
+    CHECK_FALSE(r.o.relay);
+    CHECK_FALSE(r.tick().publish_now);
+    r.in.temp = 1.5f;                                  // reading moved, nothing published changed
+    CHECK_FALSE(r.tick().publish_now);
+    r.in.temp = NAN;
+    CHECK(r.tick().publish_now);                       // temp went null, r4 unmet
 }
