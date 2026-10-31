@@ -13,6 +13,17 @@ Commands& panel_commands();
 class Alarms;
 Alarms& panel_alarms();
 
+// The dehumidifier (fixed dehum/... topics, RULES-dehum.md): its last
+// dehum/data, its own trend (temperature with humidity alongside, relay 1 as
+// the sample's `ac`), and its command queue.
+struct DehumState;
+DehumState& dehum_state();
+History& dehum_history();
+class DehumCommands;
+DehumCommands& dehum_commands();
+// Online by dehum_health(): what the Temp/Humidity page's controls require.
+bool dehum_controls_enabled();
+
 struct PanelConfig;
 // Panel-local settings (alarm thresholds, backlight, night dim, default
 // zoom) -- belongs to the panel, never published to the cooler. Callers
@@ -20,8 +31,9 @@ struct PanelConfig;
 // or sim/config.h (sim); this accessor just holds the in-memory value.
 PanelConfig& panel_config();
 
-// 7 days at 30 s (falls back to 24 h if the big allocation fails). Call once
-// from ui_init() before the trend screen's first refresh.
+// 7 days at 30 s (falls back to 24 h if the big allocation fails), and 24 h
+// at 30 s for the dehumidifier (its graph zooms to 12 h). Call once from
+// ui_init() before the trend screen's first refresh.
 void app_init_history();
 
 #ifdef __cplusplus

@@ -72,8 +72,10 @@ Span chart_joined_rh(const Column* cols, size_t i) {
     return Span{mid < pm ? mid : pm, mid > pm ? mid : pm};
 }
 
-// Integral (degC*s) and seconds on record of the temperature over [a, b).
-static void integrate(const History& h, int64_t a, int64_t b, double& area, double& cover) {
+// Integral (degC*s, or %RH*s) and seconds on record of the reading over [a, b).
+static void integrate(const History& h, int64_t a, int64_t b, double& area, double& cover,
+                      AvgOf of) {
+    const bool rh = of == AvgOf::Rh;
     area = cover = 0;
     const size_t n = h.size();
     if (n < 2 || b <= a) return;
@@ -91,16 +93,18 @@ static void integrate(const History& h, int64_t a, int64_t b, double& area, doub
         const int64_t x0 = p.t > a ? p.t : a;
         const int64_t x1 = q.t < b ? q.t : b;
         if (x1 <= x0) continue;
-        const double v0 = p.temp_c10 + (q.temp_c10 - p.temp_c10) * (double)(x0 - p.t) / dt;
-        const double v1 = p.temp_c10 + (q.temp_c10 - p.temp_c10) * (double)(x1 - p.t) / dt;
+        const double pv = rh ? p.rh_c10 : p.temp_c10;
+        const double qv = rh ? q.rh_c10 : q.temp_c10;
+        const double v0 = pv + (qv - pv) * (double)(x0 - p.t) / dt;
+        const double v1 = pv + (qv - pv) * (double)(x1 - p.t) / dt;
         area += (v0 + v1) / 2.0 * (double)(x1 - x0) / 10.0;
         cover += (double)(x1 - x0);
     }
 }
 
-bool chart_window_mean(const History& h, int64_t from, int64_t to, float& out) {
+bool chart_window_mean(const History& h, int64_t from, int64_t to, float& out, AvgOf of) {
     double area, cover;
-    integrate(h, from, to, area, cover);
+    integrate(h, from, to, area, cover, of);
     if (cover <= 0) return false;
     out = (float)(area / cover);
     return true;
@@ -108,28 +112,28 @@ bool chart_window_mean(const History& h, int64_t from, int64_t to, float& out) {
 
 // Mean over the kAvgWindowS ending at te; false when the record does not
 // reach back to the window's start or covers less than 90% of it.
-static bool mean_ending(const History& h, int64_t te, float& out) {
+static bool mean_ending(const History& h, int64_t te, float& out, AvgOf of) {
     if (h.size() < 2) return false;
     const int64_t a = te - kAvgWindowS;
     if (a < h.oldest_epoch()) return false;
     double area, cover;
-    integrate(h, a, te, area, cover);
+    integrate(h, a, te, area, cover, of);
     if (cover < 0.9 * kAvgWindowS) return false;
     out = (float)(area / cover);
     return true;
 }
 
 void chart_rolling_avg(const History& h, int64_t from, int64_t to, size_t ncols,
-                       float* out, bool* has) {
+                       float* out, bool* has, AvgOf of) {
     for (size_t c = 0; c < ncols; c++) has[c] = false;
     if (ncols == 0 || to <= from) return;
     const int64_t span = to - from;
     for (size_t c = 0; c < ncols; c++)
-        has[c] = mean_ending(h, from + (span * (int64_t)(c + 1)) / (int64_t)ncols, out[c]);
+        has[c] = mean_ending(h, from + (span * (int64_t)(c + 1)) / (int64_t)ncols, out[c], of);
 }
 
-bool chart_latest_avg(const History& h, int64_t now, float& out) {
-    return mean_ending(h, now, out);
+bool chart_latest_avg(const History& h, int64_t now, float& out, AvgOf of) {
+    return mean_ending(h, now, out, of);
 }
 
 void chart_avg_text(bool has, float v, char* buf, size_t n) {
@@ -138,7 +142,8 @@ void chart_avg_text(bool has, float v, char* buf, size_t n) {
 }
 
 void series_toggle(SeriesShown& s, Series which) {
-    bool& b = which == Series::Temp ? s.temp : which == Series::Rh ? s.rh : s.avg;
+    bool& b = which == Series::Temp ? s.temp : which == Series::Rh ? s.rh
+            : which == Series::Avg ? s.avg : s.rh_avg;
     b = !b;
 }
 

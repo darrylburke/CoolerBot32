@@ -7,6 +7,7 @@
                          // .tick() below needs the complete Commands type.
 #include "alarm.h"      // ditto for panel_alarms()/.update() below.
 #include "panel_config.h"  // ditto for panel_config().alarm/.default_zoom_s.
+#include "dehum_commands.h" // and for dehum_commands().tick().
 #include "screen_trend.h"  // trend_set_zoom() -- applying the persisted default.
 #include "platform.h"
 #include "device_config.h"
@@ -59,6 +60,8 @@ constexpr uint32_t kSplashMs = 4500;   // 4.5s: long enough to actually read
 // silent regression (nothing publishes; ControllerSilent can never fire).
 static void tick_cb(lv_timer_t*) {
     panel_commands().tick(platform_now_ms());
+    // The dehumidifier's edits have the same wall-clock debounce and deadline.
+    dehum_commands().tick(platform_now_ms(), dehum_state(), dehum_controls_enabled());
     panel_alarms().update(cooler_state(), platform_epoch_utc());
     ui_refresh();
 }

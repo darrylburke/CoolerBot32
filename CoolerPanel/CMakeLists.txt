@@ -43,6 +43,8 @@ add_executable(cooler_tests
     tests/test_alarm.cpp
     tests/test_panel_config.cpp
     tests/test_status_text.cpp
+    tests/test_dehum.cpp
+    tests/test_dehum_wiring.cpp
     config/tests/test_device_config.cpp)
 target_include_directories(cooler_tests PRIVATE tests)
 target_link_libraries(cooler_tests PRIVATE cooler_shared cooler_config lvgl doctest::doctest)

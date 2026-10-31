@@ -1,5 +1,6 @@
 #include "screen_trend.h"
 #include "chart.h"
+#include "trend_plot.h"
 #include "history.h"
 #include "cooler_state.h"
 #include "app.h"
@@ -56,25 +57,24 @@
 #define GRAPH_Y    214
 #define GRAPH_W    408
 #define GRAPH_H    168
-#define NCOLS      102
 
 #define ZOOM_Y     390
+#define ZOOM_W     50
 #define FOOT_Y     430
 
 static lv_obj_t* s_root;
-static lv_obj_t* s_canvas;
+static TrendPlot s_plot;             // the graph, its scales and average readouts
 static lv_obj_t* s_foot_lbl;
 static lv_obj_t* s_age_lbl;
 // Override-switch chip beside the name: always shows the switch position, so
 // "is override on?" never needs reading the status card.
 static lv_obj_t* s_sw_chip; static lv_obj_t* s_sw_lbl;
-static lv_color_t* s_cbuf;
 static int s_zoom = 10800;
 static SeriesShown s_shown;        // both traces; not kept across reboots
 static lv_obj_t* s_chip_t;
 static lv_obj_t* s_chip_h;
 static lv_obj_t* s_chip_a;
-static lv_obj_t* s_avg_lbl;          // "avg 3.9" over the graph's top right
+static lv_obj_t* s_chip_ha;          // "RH avg": the 1-hour rolling average humidity
 
 static void draw_graph(void);
 
@@ -90,11 +90,12 @@ static void chips_style(void) {
     chip_style(s_chip_t, s_shown.temp, th_ink2());
     chip_style(s_chip_h, s_shown.rh, th_rh());
     chip_style(s_chip_a, s_shown.avg, th_ink());
+    chip_style(s_chip_ha, s_shown.rh_avg, th_rh_avg());
 }
 
-static lv_obj_t* chip_create(int x, const char* text, Series which) {
+static lv_obj_t* chip_create(int x, int w, const char* text, Series which) {
     lv_obj_t* b = lv_button_create(s_root);
-    lv_obj_set_size(b, 56, 32);
+    lv_obj_set_size(b, w, 32);
     lv_obj_set_pos(b, x, ZOOM_Y);
     lv_obj_set_style_radius(b, 16, 0);
     lv_obj_set_style_shadow_width(b, 0, 0);
@@ -109,8 +110,6 @@ static lv_obj_t* chip_create(int x, const char* text, Series which) {
     }, LV_EVENT_CLICKED, (void*)(intptr_t)which);
     return b;
 }
-static lv_obj_t* s_ax_t[3];
-static lv_obj_t* s_ax_h[3];
 
 // big temperature block
 static lv_obj_t* s_big_box; static lv_obj_t* s_big_n; static lv_obj_t* s_big_u; static lv_obj_t* s_big_s;
@@ -246,35 +245,14 @@ lv_obj_t* screen_trend_create(lv_obj_t* parent) {
     cell_icon(s_state, &icon_duty);       // the controller's cycle
     cell_icon(s_comp,  &icon_aircon);     // the unit itself
 
-    s_cbuf = (lv_color_t*)lv_malloc(
-        LV_CANVAS_BUF_SIZE(GRAPH_W, GRAPH_H, 16, LV_DRAW_BUF_STRIDE_ALIGN));
-    if (s_cbuf) {
-        s_canvas = lv_canvas_create(s_root);
-        lv_canvas_set_buffer(s_canvas, s_cbuf, GRAPH_W, GRAPH_H, LV_COLOR_FORMAT_RGB565);
-        lv_obj_set_pos(s_canvas, GRAPH_X, GRAPH_Y);
-    }
-
-    // Axis ticks, coloured to their series so no legend is needed. The left
-    // (temperature) scale is neutral, not cyan: cyan means "cooling was
-    // requested", and an axis is not a series.
-    for (int i = 0; i < 3; i++) {
-        const int y = GRAPH_Y - 7 + i * ((GRAPH_H - 1) / 2);
-        s_ax_t[i] = lv_label_create(s_root);
-        lv_obj_set_pos(s_ax_t[i], 4, y);
-        lv_obj_set_style_text_color(s_ax_t[i], th_ink2(), 0);
-        lv_label_set_text(s_ax_t[i], "");
-        s_ax_h[i] = lv_label_create(s_root);
-        lv_obj_set_pos(s_ax_h[i], GRAPH_X + GRAPH_W + 6, y);
-        lv_obj_set_style_text_color(s_ax_h[i], th_rh(), 0);
-        lv_label_set_text(s_ax_h[i], "");
-    }
+    trend_plot_create(s_plot, s_root, GRAPH_X, GRAPH_Y, GRAPH_W, GRAPH_H);
 
     static const char* zooms[] = {"1h", "3h", "6h", "12h"};
     static const int zsec[] = {3600, 10800, 21600, 43200};
     for (int i = 0; i < 4; i++) {
         lv_obj_t* b = lv_button_create(s_root);
-        lv_obj_set_size(b, 60, 32);
-        lv_obj_set_pos(b, PAD + i * 66, ZOOM_Y);
+        lv_obj_set_size(b, ZOOM_W, 32);
+        lv_obj_set_pos(b, PAD + i * (ZOOM_W + 4), ZOOM_Y);
         lv_obj_set_style_bg_color(b, th_surface(), 0);
         lv_obj_set_style_radius(b, 16, 0);
         lv_obj_t* l = lv_label_create(b);
@@ -287,20 +265,13 @@ lv_obj_t* screen_trend_create(lv_obj_t* parent) {
     }
 
     // Show/hide chips, coloured like their traces; dim and outlined when off.
-    s_chip_t = chip_create(284, "Temp", Series::Temp);
-    s_chip_h = chip_create(346, "RH", Series::Rh);
-    s_chip_a = chip_create(408, "Avg", Series::Avg);
+    // Four chips and four zooms share the row: 4 * 50 + 3 * 4 for the zooms,
+    // then the chips sized to their words, ending on the right margin (464).
+    s_chip_t  = chip_create(236, 52, "Temp",   Series::Temp);
+    s_chip_h  = chip_create(294, 44, "RH",     Series::Rh);
+    s_chip_a  = chip_create(344, 48, "Avg",    Series::Avg);
+    s_chip_ha = chip_create(398, 66, "RH avg", Series::RhAvg);
     chips_style();
-
-    s_avg_lbl = lv_label_create(s_root);
-    lv_obj_set_pos(s_avg_lbl, GRAPH_X + GRAPH_W - 76, GRAPH_Y + 4);
-    lv_obj_set_style_text_color(s_avg_lbl, th_ink(), 0);
-    // It sits over the plot: a backing keeps it readable across the trace.
-    lv_obj_set_style_bg_color(s_avg_lbl, th_page(), 0);
-    lv_obj_set_style_bg_opa(s_avg_lbl, LV_OPA_80, 0);
-    lv_obj_set_style_pad_hor(s_avg_lbl, 4, 0);
-    lv_obj_set_style_radius(s_avg_lbl, 4, 0);
-    lv_label_set_text(s_avg_lbl, "");
 
     s_foot_lbl = lv_label_create(s_root);
     lv_obj_set_pos(s_foot_lbl, PAD, FOOT_Y);
@@ -308,11 +279,6 @@ lv_obj_t* screen_trend_create(lv_obj_t* parent) {
 
     screen_trend_refresh();
     return s_root;
-}
-
-static void axis_clear(void) {
-    for (int i = 0; i < 3; i++) { lv_label_set_text(s_ax_t[i], ""); lv_label_set_text(s_ax_h[i], ""); }
-    if (s_avg_lbl) lv_label_set_text(s_avg_lbl, "");
 }
 
 // "12s" / "4m" / "2h". Terse: it shares the header row.
@@ -324,160 +290,17 @@ static void fmt_age(char* out, size_t n, int64_t secs) {
 }
 
 static void draw_graph(void) {
-    if (!s_canvas) return;
-    lv_layer_t layer;
-    lv_canvas_init_layer(s_canvas, &layer);
-    lv_canvas_fill_bg(s_canvas, th_surface(), LV_OPA_COVER);
-
     const CoolerState& st = cooler_state();
-    History& h = panel_history();
-    if (h.size() < 2) { axis_clear(); lv_canvas_finish_layer(s_canvas, &layer); return; }
-
-    const int64_t to = chart_window_end(h.newest_epoch(), platform_epoch_utc());
-    const int64_t from = to - s_zoom;
-    static Column cols[NCOLS];
-    chart_downsample(h, from, to, cols, NCOLS);
-
-    // Auto-range on the data, always including the setpoint band.
-    float lo = 1e9f, hi = -1e9f;
-    for (int i = 0; i < NCOLS; i++) {
-        if (!cols[i].has) continue;
-        if (cols[i].tmin < lo) lo = cols[i].tmin;
-        if (cols[i].tmax > hi) hi = cols[i].tmax;
-    }
-    if (lo > hi) { axis_clear(); lv_canvas_finish_layer(s_canvas, &layer); return; }
+    TrendPlotOpts o;
+    o.shown = s_shown;
+    o.zoom_s = s_zoom;
     // The band actually in force: override runs the controller's fixed
     // 3..5 C thermostat, whatever coolerset/range say.
     const bool ovr = cooler_in_override(st);
-    const float band_lo = ovr ? 3.0f : (float)(st.coolerset - st.range);
-    const float band_hi = ovr ? 5.0f : (float)(st.coolerset + st.range);
-    if (band_lo < lo) lo = band_lo;
-    if (band_hi > hi) hi = band_hi;
-    if (hi - lo < 1.0f) { hi = lo + 1.0f; }
-    const float pad = (hi - lo) * 0.1f;
-    lo -= pad; hi += pad;
-
-    auto y_of = [&](float v) -> int32_t {
-        return (int32_t)(GRAPH_H - 1 - ((v - lo) / (hi - lo)) * (GRAPH_H - 1));
-    };
-
-    // Humidity gets its OWN vertical range. Temp sits near 14 and RH near 84,
-    // so a shared axis would squash the temperature trace into a flat line
-    // along the bottom and tell you nothing. Independent scales mean the two
-    // traces are each readable; the legend says which is which, and neither
-    // trace's absolute height is comparable to the other's -- only its shape.
-    float hlo = 1e9f, hhi = -1e9f;
-    for (int i = 0; i < NCOLS; i++) {
-        if (!cols[i].has) continue;
-        if (cols[i].hmin < hlo) hlo = cols[i].hmin;
-        if (cols[i].hmax > hhi) hhi = cols[i].hmax;
-    }
-    const bool have_rh = s_shown.rh && (hlo <= hhi);
-    if (have_rh) {
-        if (hhi - hlo < 2.0f) { hhi = hlo + 2.0f; }
-        const float hpad = (hhi - hlo) * 0.1f;
-        hlo -= hpad; hhi += hpad;
-    }
-    auto hy_of = [&](float v) -> int32_t {
-        return (int32_t)(GRAPH_H - 1 - ((v - hlo) / (hhi - hlo)) * (GRAPH_H - 1));
-    };
-
-    // Tick values, top to bottom, now that both ranges are settled.
-    char tk[16];
-    for (int i = 0; i < 3; i++) {
-        snprintf(tk, sizeof(tk), "%.0f", (double)(hi - (hi - lo) * i / 2.0f));
-        // The average line is drawn on the temperature scale too.
-        lv_label_set_text(s_ax_t[i], (s_shown.temp || s_shown.avg) ? tk : "");
-        if (have_rh) {
-            snprintf(tk, sizeof(tk), "%.0f", (double)(hhi - (hhi - hlo) * i / 2.0f));
-            lv_label_set_text(s_ax_h[i], tk);
-        } else {
-            lv_label_set_text(s_ax_h[i], "");
-        }
-    }
-
-    // Setpoint band
-    lv_draw_rect_dsc_t band;
-    lv_draw_rect_dsc_init(&band);
-    band.bg_color = lv_color_hex(0x212a26);
-    band.bg_opa = LV_OPA_60;
-    lv_area_t ba = {0, y_of(band_hi), GRAPH_W - 1, y_of(band_lo)};
-    if (s_shown.temp) lv_draw_rect(&layer, &band, &ba);   // the band is the temperature's
-
-    // Temperature min/max bars, cyan where the controller was requesting
-    // cooling for most of the column -- the same cyan the status card wears
-    // while cooling, so the card is the legend.
-    //
-    // Idle stretches are neutral grey rather than a dimmed accent: on a graph
-    // the shape of the curve is the data, and it has to stay legible whether
-    // or not anything was cooling. th_ink2() sits just under both accents in
-    // luminance, so running periods still read as the brighter, saturated
-    // ones without idle periods fading out.
-    lv_draw_rect_dsc_t bar;
-    lv_draw_rect_dsc_init(&bar);
-    bar.bg_opa = LV_OPA_COVER;
-    const int32_t colw = GRAPH_W / NCOLS;
-    for (int i = 0; i < NCOLS; i++) {
-        if (!cols[i].has || !s_shown.temp) continue;      // gap stays blank
-        bar.bg_color = cols[i].ac ? th_cool() : th_ink2();
-        const Span sp = chart_joined_temp(cols, i);   // meets its neighbour
-        int32_t y0 = y_of(sp.hi);
-        int32_t y1 = y_of(sp.lo);
-        if (y1 - y0 < 2) y1 = y0 + 2;    // keep flat runs visible
-        lv_area_t a = {i * colw, y0, i * colw + colw - 1, y1};
-        lv_draw_rect(&layer, &bar, &a);
-    }
-
-    // Humidity: a thin trace rather than filled bars, so it reads as an
-    // overlay on the temperature rather than competing with it.
-    if (have_rh) {
-        lv_draw_rect_dsc_t rh;
-        lv_draw_rect_dsc_init(&rh);
-        rh.bg_color = th_rh();
-        rh.bg_opa = LV_OPA_COVER;
-        for (int i = 0; i < NCOLS; i++) {
-            if (!cols[i].has) continue;    // same honest gap as the temp trace
-            const Span sp = chart_joined_rh(cols, i);    // midpoint to midpoint
-            int32_t y0 = hy_of(sp.hi);
-            int32_t y1 = hy_of(sp.lo) + 2;
-            if (y0 < 0) y0 = 0;
-            if (y1 > GRAPH_H - 1) y1 = GRAPH_H - 1;
-            if (y1 - y0 < 2) y0 = y1 - 2;
-            lv_area_t a = {i * colw, y0, i * colw + colw - 1, y1};
-            lv_draw_rect(&layer, &rh, &a);
-        }
-    }
-
-    // Rolling 1 h mean: a thin bright line over the trace, joined column to
-    // column, broken where the record cannot support a whole hour.
-    char abuf[24] = "";
-    if (s_shown.avg) {
-        static float avg[NCOLS];
-        static bool has[NCOLS];
-        chart_rolling_avg(h, from, to, NCOLS, avg, has);
-        lv_draw_rect_dsc_t ad;
-        lv_draw_rect_dsc_init(&ad);
-        ad.bg_color = th_ink();
-        ad.bg_opa = LV_OPA_COVER;
-        for (int i = 0; i < NCOLS; i++) {
-            if (!has[i]) continue;
-            float lo_v = avg[i], hi_v = avg[i];
-            if (i > 0 && has[i - 1]) {
-                if (avg[i - 1] < lo_v) lo_v = avg[i - 1];
-                if (avg[i - 1] > hi_v) hi_v = avg[i - 1];
-            }
-            int32_t y0 = y_of(hi_v), y1 = y_of(lo_v);
-            if (y0 < 0) y0 = 0;
-            if (y1 > GRAPH_H - 1) y1 = GRAPH_H - 1;
-            if (y1 - y0 < 2) y0 = y1 - 2;
-            lv_area_t a = {i * colw, y0, i * colw + colw - 1, y1};
-            lv_draw_rect(&layer, &ad, &a);
-        }
-        float m;
-        if (chart_window_mean(h, from, to, m)) snprintf(abuf, sizeof(abuf), "avg %.1f", (double)m);
-    }
-    lv_label_set_text(s_avg_lbl, abuf);
-    lv_canvas_finish_layer(s_canvas, &layer);
+    o.band = true;
+    o.band_lo = ovr ? 3.0f : (float)(st.coolerset - st.range);
+    o.band_hi = ovr ? 5.0f : (float)(st.coolerset + st.range);
+    trend_plot_draw(s_plot, panel_history(), platform_epoch_utc(), o);
 }
 
 void screen_trend_refresh(void) {

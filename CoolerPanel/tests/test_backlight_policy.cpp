@@ -29,3 +29,28 @@ TEST_CASE("night dimming never raises a level already below the dim level") {
     CHECK(backlight_level(10, true, 300 * MIN, false) == 10);
     CHECK(backlight_level(10, true, 0, false) == 10);
 }
+
+TEST_CASE("an alarm lights the screen only after it has held for 1 s") {
+    CHECK(kAlarmWakeMs == 1000);
+    AlarmWake w;
+    CHECK_FALSE(w.update(false, 5000));
+    CHECK_FALSE(w.update(true, 6000));            // just went true
+    CHECK_FALSE(w.update(true, 6000 + 999));
+    CHECK(w.update(true, 6000 + 1000));           // held 1 s
+    CHECK(w.update(true, 60000));                 // and stays held
+}
+
+TEST_CASE("a one-tick alarm never lights the screen") {
+    AlarmWake w;
+    CHECK_FALSE(w.update(true, 1000));
+    CHECK_FALSE(w.update(false, 1250));           // gone by the next tick
+    CHECK_FALSE(w.update(true, 1500));            // a new blip starts over
+    CHECK_FALSE(w.update(true, 2400));
+    CHECK(w.update(true, 2500));
+}
+
+TEST_CASE("alarm hold timing survives millis() wrapping") {
+    AlarmWake w;
+    CHECK_FALSE(w.update(true, 0xFFFFFF00u));
+    CHECK(w.update(true, 0xFFFFFF00u + 1000u));   // wraps past zero
+}

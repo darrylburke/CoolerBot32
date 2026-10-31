@@ -39,8 +39,11 @@ int main(int argc, char** argv) {
     bool seed = false;            // debug flag: --seed-history (see seed_history.cpp)
     const char* fixture = nullptr; // debug flag: --fixture FILE -- feed one /data
                                    // payload instead of connecting to the broker
-    int page = -1;                // debug flag: --page 0|1|2 (Trend|Settings|Detail)
+    int page = -1;                // debug flag: --page 0|1|2|3 (Trend|Settings|Detail|Temp/Humidity)
     int tab = -1;                 // debug flag: --tab 0|1|2 (Settings: Box|Coil|Timing)
+    const char* dfixture = nullptr; // debug flag: --dehum-fixture FILE -- feed one dehum/data
+    int dtab = -1;                // debug flag: --dtab 0|1 (Temp/Humidity: Graph|Controls)
+    int dscroll = -1;             // debug flag: --dscroll PX (scroll Temp/Humidity Controls)
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--frames") && i + 1 < argc) frames = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--screenshot") && i + 1 < argc) shot = argv[++i];
@@ -49,6 +52,9 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--fixture") && i + 1 < argc) fixture = argv[++i];
         else if (!strcmp(argv[i], "--page") && i + 1 < argc) page = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--tab") && i + 1 < argc) tab = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--dehum-fixture") && i + 1 < argc) dfixture = argv[++i];
+        else if (!strcmp(argv[i], "--dtab") && i + 1 < argc) dtab = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--dscroll") && i + 1 < argc) dscroll = atoi(argv[++i]);
     }
     g_start = std::chrono::steady_clock::now();
     lv_init();
@@ -124,7 +130,18 @@ int main(int argc, char** argv) {
                 extern void seed_demo_history(int, int, int);
                 extern void screen_trend_refresh(void);
                 seed_demo_history(5, 10, 80);   // setpoint 5C, maxrun 10m, duty 80%
+                extern void seed_dehum_history();
+                seed_dehum_history();
                 screen_trend_refresh();
+            }
+            if (dfixture) {
+                // As --fixture, for the dehumidifier. Either fixture flag
+                // keeps the sim off the broker.
+                extern bool sim_feed_dehum_fixture(const char* path);
+                if (!sim_feed_dehum_fixture(dfixture)) {
+                    fprintf(stderr, "cannot read fixture %s\n", dfixture);
+                    return 2;
+                }
             }
             if (fixture) {
                 // Deterministic screenshots: route one captured /data (plus an
@@ -135,7 +152,7 @@ int main(int argc, char** argv) {
                     fprintf(stderr, "cannot read fixture %s\n", fixture);
                     return 2;
                 }
-            } else {
+            } else if (!dfixture) {
                 extern void mqtt_start(const SimConfig&);
                 SimConfig scfg = config_load(argc, argv);
                 mqtt_start(scfg);   // connects in the background; the main loop
@@ -146,7 +163,15 @@ int main(int argc, char** argv) {
                 extern void screen_settings_show_tab(int);
                 screen_settings_show_tab(tab);
             }
+            if (dtab >= 0) {
+                extern void screen_dehum_show_tab(int);
+                screen_dehum_show_tab(dtab);
+            }
             ui_refresh();
+            if (dscroll >= 0) {
+                extern void screen_dehum_scroll_to(int);
+                screen_dehum_scroll_to(dscroll);
+            }
         }
     }
 

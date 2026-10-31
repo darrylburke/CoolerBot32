@@ -21,8 +21,13 @@ static uint32_t s_manual_ms = 0;   // last button change counts as activity
 static uint32_t s_boot_ms = 0;     // so does boot: the panel starts bright
 static uint8_t s_cur = 255;
 
-static void apply(uint8_t want) {
+static AlarmWake s_alarm_wake;
+
+// `why` goes to the serial log with every change, so a stray flash can be
+// traced to what lit it.
+static void apply(uint8_t want, const char* why = "config") {
     if (want != s_cur) {
+        Serial.printf("backlight: %u -> %u (%s)\n", s_cur, want, why);
         s_cur = want;
         display_set_brightness(want);
     }
@@ -44,21 +49,21 @@ void backlight_cycle() {
     s_level_idx = (s_level_idx + 1) % (int)(sizeof kLevels / sizeof kLevels[0]);
     s_user = kLevels[s_level_idx];
     s_manual_ms = millis();
-    apply(s_user);
+    apply(s_user, "button");
     Serial.printf("backlight: level %d/3 (%u)\n", s_level_idx + 1, s_user);
 }
 
 void backlight_apply_config(int percent, bool night_dim) {
     s_user = pct_to_255(percent);
     s_night_dim = night_dim;
-    apply(s_user);
+    apply(s_user, "config");
     Serial.printf("backlight: applying configured %d%% (%u/255), night_dim=%s\n",
                   percent, s_user, night_dim ? "on" : "off");
 }
 
 void backlight_init() {
     s_boot_ms = millis();
-    apply(s_user);   // don't wait for the first 1 s tick
+    apply(s_user, "boot");   // don't wait for the first tick
     lv_timer_create([](lv_timer_t*) {
         uint8_t user = s_user;
         bool night = false;
@@ -76,8 +81,14 @@ void backlight_init() {
         const uint32_t touch = display_last_touch_ms();
         if (touch != 0 && now - touch < idle) idle = now - touch;
         if (s_manual_ms != 0 && now - s_manual_ms < idle) idle = now - s_manual_ms;
-        const bool alarm = panel_alarms().active(platform_epoch_utc()) != AlarmId::None;
+        const AlarmId id = panel_alarms().active(platform_epoch_utc());
+        const bool alarm = s_alarm_wake.update(id != AlarmId::None, now);
         const uint8_t want = backlight_level(user, night, idle, alarm);
-        apply(want);
+        char why[48];
+        if (alarm) snprintf(why, sizeof why, "alarm %s", Alarms::text(id));
+        else if (want == 0) snprintf(why, sizeof why, "idle %lus", (unsigned long)(idle / 1000));
+        else snprintf(why, sizeof why, "%s, idle %lus", night ? "night" : "day",
+                      (unsigned long)(idle / 1000));
+        apply(want, why);
     }, 250, nullptr);   // 250 ms: a touch on a dark screen lights it at once
 }

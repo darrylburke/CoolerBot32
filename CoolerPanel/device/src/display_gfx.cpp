@@ -192,7 +192,18 @@ static int gt911_raw_touches() {
 }
 
 // The backlight is ACTIVE-LOW (BSP inverts: duty = 100% - brightness); 255=full on.
+// Off is a plain GPIO held high, not PWM: 8-bit LEDC tops out at 255/256
+// duty, so "off" through PWM still pulses the light every cycle.
+static bool s_bl_pwm = false;
+
 void display_set_brightness(uint8_t level) {
+    if (level == 0) {
+        if (s_bl_pwm) { ledcDetach(kBacklightPin); s_bl_pwm = false; }
+        pinMode(kBacklightPin, OUTPUT);
+        digitalWrite(kBacklightPin, HIGH);
+        return;
+    }
+    if (!s_bl_pwm) { ledcAttach(kBacklightPin, 5000 /* Hz */, 8 /* bits */); s_bl_pwm = true; }
     ledcWrite(kBacklightPin, 255 - level);
 }
 
@@ -273,8 +284,7 @@ void display_init() {
     Serial.printf("display: gfx begin -> %s\n", s_gfx->begin() ? "ok" : "FAILED");
     s_gfx->fillScreen(RGB565_BLACK);
 
-    ledcAttach(kBacklightPin, 5000 /* Hz */, 8 /* bits */);
-    display_set_brightness(255);
+    display_set_brightness(255);   // attaches the PWM
 
     s_touch.setPins(-1, -1);
     s_touch_ok = s_touch.begin(Wire, GT911_SLAVE_ADDRESS_L, 47, 48);

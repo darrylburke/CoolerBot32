@@ -2,6 +2,7 @@
 #include "screen_trend.h"
 #include "screen_settings.h"
 #include "screen_detail.h"
+#include "screen_dehum.h"
 #include "screen_alarm.h"
 #include "screen_config.h"
 
@@ -15,9 +16,12 @@
 // belt-and-braces rather than load-bearing.
 //
 // Tile scroll directions: the leftmost tile (Trend) only allows swiping
-// further right (into Settings); the rightmost tile (Detail) only allows
-// swiping further left (into Settings); the middle tile (Settings) allows
-// both, so it's reachable from -- and can leave to -- either neighbour.
+// further right (into Settings); the rightmost tile only allows swiping
+// further left; the ones between allow both, so each is reachable from -- and
+// can leave to -- either neighbour.
+//
+// The dehumidifier's Temp/Humidity page (spec 2026-10-31 §3) is the fourth,
+// appended after Detail so the Cooler's pages keep their indices.
 static lv_obj_t* s_tv = nullptr;
 
 // Idempotency guard (flagged in Task 13's review): a second call used to
@@ -34,11 +38,13 @@ void nav_init(lv_obj_t* root) {
 
     lv_obj_t* t0 = lv_tileview_add_tile(s_tv, 0, 0, LV_DIR_RIGHT);
     lv_obj_t* t1 = lv_tileview_add_tile(s_tv, 1, 0, LV_DIR_HOR);   // LV_DIR_LEFT | LV_DIR_RIGHT
-    lv_obj_t* t2 = lv_tileview_add_tile(s_tv, 2, 0, LV_DIR_LEFT);
+    lv_obj_t* t2 = lv_tileview_add_tile(s_tv, 2, 0, LV_DIR_HOR);
+    lv_obj_t* t3 = lv_tileview_add_tile(s_tv, 3, 0, LV_DIR_LEFT);
 
     screen_trend_create(t0);
     screen_settings_create(t1);
     screen_detail_create(t2);
+    screen_dehum_create(t3);
     screen_config_create(root);   // hidden overlay, opened from Detail
     screen_alarm_create(root);   // sits above the tileview, hidden until active
 }
@@ -47,10 +53,11 @@ void nav_refresh(void) {
     screen_trend_refresh();
     screen_settings_refresh();
     screen_detail_refresh();
+    screen_dehum_refresh();
     screen_alarm_refresh();      // shows/hides itself based on Alarms::active()
 }
 
 void nav_show_page(int index) {
-    if (!s_tv || index < 0 || index > 2) return;
+    if (!s_tv || index < 0 || index > 3) return;
     lv_tileview_set_tile_by_index(s_tv, (uint32_t)index, 0, LV_ANIM_OFF);
 }

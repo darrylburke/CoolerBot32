@@ -5,6 +5,7 @@
 #include <PubSubClient.h>
 #include <lwip/netdb.h>
 #include "app.h"
+#include "dehum_state.h"                // DEHUM_TOPIC_*
 #include "cooler_defaults.h"            // COOLER_DEFAULT_MQTT_CA
 
 static DeviceConfig s_cfg;              // owns the strings the connection points at
@@ -52,7 +53,7 @@ void mqtt_begin(const DeviceConfig& c) {
         s_mqtt.setClient(s_plain);
     }
     s_mqtt.setServer(s_cfg.mqtt_host.c_str(), s_cfg.mqtt_port);
-    s_mqtt.setBufferSize(24576);            // /history from Node-RED is ~14 KB
+    s_mqtt.setBufferSize(24576);            // /history (and dehum/history) from Node-RED is ~14 KB
     s_mqtt.setKeepAlive(30);
     s_mqtt.setCallback(on_message);
     app_set_link_state(LINK_MQTT_DOWN);
@@ -105,6 +106,12 @@ void mqtt_poll() {
         s_mqtt.subscribe((s_cfg.mqtt_base + "/data").c_str(), 1);
         s_mqtt.subscribe((s_cfg.mqtt_base + "/availability").c_str(), 1);
         s_mqtt.subscribe((s_cfg.mqtt_base + "/history").c_str(), 0);
+        // The dehumidifier's fixed topics (not under the Cooler base; the
+        // panel login's ACL allows them, RULES-dehum.md). Availability first,
+        // so its retained state is in before the retained data.
+        s_mqtt.subscribe(DEHUM_TOPIC_AVAILABILITY, 1);
+        s_mqtt.subscribe(DEHUM_TOPIC_DATA, 1);
+        s_mqtt.subscribe(DEHUM_TOPIC_HISTORY, 0);
         app_set_link_state(LINK_OK);
         s_backoff_ms = 1000;
         Serial.println("mqtt: connected + subscribed");

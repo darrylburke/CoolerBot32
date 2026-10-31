@@ -16,3 +16,22 @@ constexpr uint32_t kNightWakeMs = 30u * 1000u;
 // unacknowledged alarm is showing -- which always keeps the screen at `user`.
 // Night dimming never raises a level the user already set below kBacklightDim.
 uint8_t backlight_level(uint8_t user, bool night, uint32_t idle_ms, bool alarm);
+
+// An alarm must hold this long before it lights the screen. A condition that
+// is true for a single check (a passing glitch) would otherwise flash a dark
+// screen to full brightness for a split second.
+constexpr uint32_t kAlarmWakeMs = 1000u;
+
+// Feed it the alarm state and millis() on every check; true once the alarm
+// has been continuously active for kAlarmWakeMs.
+class AlarmWake {
+public:
+    bool update(bool alarm, uint32_t now_ms) {
+        if (!alarm) { active_ = false; return false; }
+        if (!active_) { active_ = true; since_ = now_ms; }
+        return now_ms - since_ >= kAlarmWakeMs;
+    }
+private:
+    bool active_ = false;
+    uint32_t since_ = 0;
+};

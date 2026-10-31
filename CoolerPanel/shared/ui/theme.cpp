@@ -29,6 +29,8 @@ lv_color_t th_cool()    { return lv_color_hex(0x63b6d4); }   // live / cooling /
 lv_color_t th_cool_bg() { return lv_color_hex(0x1b2b33); }   // its card fill
 lv_color_t th_cool_dim(){ return lv_color_hex(0x4d7d90); }   // its label
 lv_color_t th_rh()      { return lv_color_hex(0x7d8f6a); }   // humidity trace
+lv_color_t th_rh_avg()  { return lv_color_hex(0xc4d39a); }   // its 1-hour average
+lv_color_t th_run_shade(){ return lv_color_hex(0x22343d); }  // dehumidifier running
 
 // AC 2's identity colour. The trend colours each bar by the unit that was
 // running, so the two need telling apart -- and AC 2's card takes the same

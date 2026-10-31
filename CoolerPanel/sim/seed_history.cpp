@@ -44,3 +44,27 @@ void seed_demo_history(int coolerset, int maxrun_min, int dutypercent) {
         h.maybe_append(at, temp, rh, 0, ac);
     }
 }
+
+// The dehumidifier's trend: a day of a cold, damp walk-in (about 4 C, high
+// 90s %RH) with relay 1 running in AUTO whenever humidity climbs past the
+// default rule's 65 %RH -- here, most of the time, and pulling it down while
+// it runs. Simulator-only, like the Cooler's seed above.
+void seed_dehum_history() {
+    History& h = dehum_history();
+    h.clear();
+    const int step = 30;
+    const int64_t now = platform_epoch_utc();
+    const int64_t span = 24 * 3600;
+    float rh = 92.0f;
+    bool run = false;
+    for (int64_t age = span; age > 0; age -= step) {
+        const int64_t at = now - age;
+        const float day = sinf((float)(at % 86400) * 6.2832f / 86400.0f);
+        const float temp = 4.2f + day * 0.6f + 0.25f * sinf((float)(at % 2400) * 6.2832f / 2400.0f);
+        // Runs pull humidity down toward 88, rests let it climb back to 99.
+        rh += run ? -0.05f : 0.035f;
+        if (rh >= 98.5f) run = true;
+        if (rh <= 93.0f) run = false;
+        h.maybe_append(at, temp, rh, 0, run ? 1 : 0);
+    }
+}

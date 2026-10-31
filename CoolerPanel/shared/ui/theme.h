@@ -17,6 +17,11 @@ lv_color_t th_duty();
 // as AC 1's identity, th_ac2* is AC 2's -- the trend bars and the unit cards
 // share them, so the cards read as the graph's legend.
 lv_color_t th_cool(); lv_color_t th_cool_bg(); lv_color_t th_cool_dim(); lv_color_t th_rh();
+// The 1-hour rolling average humidity line: the humidity trace's olive, lifted
+// so it reads over the trace as the white temperature average does over its bars.
+lv_color_t th_rh_avg();
+// Column tint behind the dehumidifier graph where relay 1 was running.
+lv_color_t th_run_shade();
 lv_color_t th_ac2();  lv_color_t th_ac2_bg();  lv_color_t th_ac2_dim();
 // Vendor-status severities that the good/warn/crit trio doesn't cover.
 lv_color_t th_sev_major(); lv_color_t th_sev_maint();

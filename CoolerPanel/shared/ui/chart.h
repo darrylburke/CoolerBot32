@@ -33,9 +33,14 @@ Span chart_joined_temp(const Column* cols, size_t i);
 Span chart_joined_rh(const Column* cols, size_t i);
 
 // Which traces the trend draws: all by default, and any or all can be hidden.
-enum class Series { Temp, Rh, Avg };
-struct SeriesShown { bool temp = true; bool rh = true; bool avg = true; };
+// rh_avg is the 1-hour rolling average humidity, on the humidity scale.
+enum class Series { Temp, Rh, Avg, RhAvg };
+struct SeriesShown { bool temp = true; bool rh = true; bool avg = true; bool rh_avg = true; };
 void series_toggle(SeriesShown& s, Series which);
+
+// Which reading an average is over: temperature, or humidity (the app's
+// TrendAverage.humidity(), which averages the same record's humidity instead).
+enum class AvgOf { Temp, Rh };
 
 // Temperature averages, time-weighted the way the trace is drawn: straight
 // lines between samples, with any two samples more than kAvgMaxGapS apart
@@ -45,19 +50,20 @@ constexpr int64_t kAvgWindowS = 3600;   // about one cooling cycle of this box
 constexpr int64_t kAvgMaxGapS = 150;
 
 // Mean over [from, to); false when nothing there is on record.
-bool chart_window_mean(const History& h, int64_t from, int64_t to, float& out);
+bool chart_window_mean(const History& h, int64_t from, int64_t to, float& out,
+                       AvgOf of = AvgOf::Temp);
 
 // Rolling kAvgWindowS mean ending at each column's right edge. A column gets
 // one (has[c]) only when the record reaches back to the start of its window
 // and covers at least 90% of it -- a partial hour would average part of a
 // cooling cycle and read high or low.
 void chart_rolling_avg(const History& h, int64_t from, int64_t to, size_t ncols,
-                       float* out, bool* has);
+                       float* out, bool* has, AvgOf of = AvgOf::Temp);
 
 // The rolling mean for the hour ending `now` (same rule as a column) -- what
 // the big readout shows next to the current temperature. False without a
 // whole hour on record behind now (just booted, or the data stopped).
-bool chart_latest_avg(const History& h, int64_t now, float& out);
+bool chart_latest_avg(const History& h, int64_t now, float& out, AvgOf of = AvgOf::Temp);
 
 // One decimal, or "-.-" while there is no average yet.
 void chart_avg_text(bool has, float v, char* buf, size_t n);

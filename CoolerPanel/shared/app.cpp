@@ -6,6 +6,9 @@
 #include "commands.h"
 #include "alarm.h"
 #include "panel_config.h"
+#include "dehum_state.h"
+#include "dehum_status.h"
+#include "dehum_commands.h"
 #include <cstring>
 
 // Cold-boot default: neither Wi-Fi nor MQTT has connected yet. Both the sim
@@ -34,9 +37,57 @@ Alarms& panel_alarms() { return g_alarms; }
 static PanelConfig g_pcfg;
 PanelConfig& panel_config() { return g_pcfg; }
 
+static DehumState g_dstate;
+DehumState& dehum_state() { return g_dstate; }
+
+static History g_dhist;
+History& dehum_history() { return g_dhist; }
+
+static DehumCommands g_dcmds;
+DehumCommands& dehum_commands() { return g_dcmds; }
+
+bool dehum_controls_enabled() {
+    return dehum_health(g_link_state, g_dstate, platform_epoch_utc()) == DehumView::Online;
+}
+
 // 7 days at 30 s. Falls back to 24 h if the big allocation fails.
 void app_init_history() {
     if (!g_hist.init(20160)) g_hist.init(2880);
+    g_dhist.init(2880);
+}
+
+// dehum/... is fixed, not under the Cooler's topic base, and is never a
+// Cooler alarm: the dehumidifier being away shows on its own page only.
+static bool on_dehum_message(const char* topic, const char* payload, size_t len) {
+    if (!std::strcmp(topic, DEHUM_TOPIC_AVAILABILITY)) {
+        dehum_parse_availability(g_dstate, payload, len);
+        return true;
+    }
+    if (!std::strcmp(topic, DEHUM_TOPIC_DATA)) {
+        if (!dehum_parse_data(g_dstate, payload, len, platform_epoch_utc())) return true;
+        g_dcmds.on_state(g_dstate);
+        // Temperature is the trend's primary value and humidity rides along,
+        // the Cooler's shape; relay 1 is the sample's run flag. dehum/data is
+        // retained: a copy redelivered while the box is known offline is not a
+        // reading taken now (the panel subscribes to dehum/availability first,
+        // so its retained state is in before the data's).
+        const bool known_offline = g_dstate.availability_seen && !g_dstate.online;
+        if (g_dstate.temp_valid && g_dstate.humidity_valid && !known_offline)
+            g_dhist.maybe_append(platform_epoch_utc(), g_dstate.temp, g_dstate.humidity, 30,
+                                 (uint8_t)(g_dstate.relay ? 1 : 0));
+        return true;
+    }
+    if (!std::strcmp(topic, DEHUM_TOPIC_HISTORY)) {
+        // Node-RED's dehum/history is cooler/history's v1 window (arrays
+        // hum, temp, relay), so the same parser and gap-filling apply.
+        HistoryMsg m;
+        if (!history_msg_parse(payload, len, platform_epoch_utc(), m)) return true;
+        std::vector<Sample> add;
+        history_missing(g_dhist, m, add);
+        if (!add.empty()) g_dhist.merge_in(add.data(), add.size());
+        return true;
+    }
+    return false;
 }
 
 // Task 9 (Commands) still owns outbound /cmd publishing; this just routes
@@ -45,6 +96,8 @@ void app_init_history() {
 // inside maybe_append -- see history.h -- so the on-change publishes /data
 // also sends don't over-sample).
 extern "C" void app_on_mqtt_message(const char* topic, const uint8_t* payload, size_t len) {
+    if (!topic || !payload) return;
+    if (on_dehum_message(topic, (const char*)payload, len)) return;
     // /history (Node-RED, after every /data) is not cooler state: it only
     // fills minutes of the trend this panel did not see itself.
     if (router_is_leaf(topic, "history")) {

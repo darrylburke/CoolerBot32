@@ -2,6 +2,7 @@
 #include "app.h"
 #include "platform.h"
 #include "mqtt_router.h"
+#include "dehum_state.h"
 #include "cooler_defaults.h"   // COOLER_DEFAULT_MQTT_CA
 #include <mosquitto.h>
 #include <cstdio>
@@ -25,6 +26,11 @@ static void on_connect(struct mosquitto* m, void*, int rc) {
         mosquitto_subscribe(m, nullptr, (g_base + "/data").c_str(), 1);
         mosquitto_subscribe(m, nullptr, (g_base + "/availability").c_str(), 1);
         mosquitto_subscribe(m, nullptr, (g_base + "/history").c_str(), 0);
+        // The dehumidifier's fixed topics (RULES-dehum.md): availability
+        // first, so its retained state is in before the retained data.
+        mosquitto_subscribe(m, nullptr, DEHUM_TOPIC_AVAILABILITY, 1);
+        mosquitto_subscribe(m, nullptr, DEHUM_TOPIC_DATA, 1);
+        mosquitto_subscribe(m, nullptr, DEHUM_TOPIC_HISTORY, 0);
         app_set_link_state(LINK_OK);
     }
     else { fprintf(stderr, "mqtt connect rc=%d\n", rc); app_set_link_state(LINK_MQTT_DOWN); }
