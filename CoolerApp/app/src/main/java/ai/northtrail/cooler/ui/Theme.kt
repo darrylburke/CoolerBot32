@@ -23,6 +23,8 @@ object CoolerColors {
     val Humidity = Color(0xFFA9BC8A)
     /** The rolling-average line: soft, so the raw trace stays the subject. */
     val Average = Color(0xCCE6EDF3)
+    /** The rolling-average humidity line: a pale olive, beside the humidity trace. */
+    val RhAverage = Color(0xCCDCE8B4)
 }
 
 @Composable

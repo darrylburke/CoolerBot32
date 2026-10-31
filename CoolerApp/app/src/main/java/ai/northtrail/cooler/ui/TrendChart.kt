@@ -31,13 +31,15 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 /**
  * Box temperature and humidity from [fromEpochS] to [toEpochS]. Temperature: the
  * setpoint band shaded, spans with the relay closed tinted, a line, and whole-degree
  * labels on the left. Humidity: a thinner line on its own scale, labelled on the
  * right. [average] is the 1-hour rolling mean (see [TrendAverage]) drawn over the
- * temperature, with [windowMean] as "avg" in the header. [shown] hides any of them.
+ * temperature, with [windowMean] as "avg" in the header; [rhAverage] / [rhWindowMean]
+ * are the same for humidity, on its scale. [shown] hides any of them.
  * Lines break where samples are missing (see [TrendSegments]).
  */
 @Composable
@@ -55,8 +57,13 @@ fun TrendChart(
     unit: String = "°",
     /** Colour of the primary series' line. */
     lineColor: Color = CoolerColors.Accent,
-    /** A dashed horizontal line on the primary scale (the dehumidifier's AUTO threshold). */
-    threshold: Double? = null,
+    /** The 1-hour rolling mean humidity (see [TrendAverage.humidity]). */
+    rhAverage: List<Pair<Long, Double>> = emptyList(),
+    rhWindowMean: Double? = null,
+    /** Dashed horizontal lines on the primary scale (the dehumidifier's temperature rules). */
+    thresholds: List<Double> = emptyList(),
+    /** Dashed horizontal lines on the humidity scale (the dehumidifier's humidity rules). */
+    rhThresholds: List<Double> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     if (samples.size < 2) {
@@ -68,18 +75,22 @@ fun TrendChart(
     val bandLo = if (setpoint != null && range != null) (setpoint - range).toDouble() else null
     val bandHi = if (setpoint != null && range != null) (setpoint + range).toDouble() else null
     val temps = samples.map { it.value }
-    val yMin = listOfNotNull(temps.min(), bandLo, threshold).min() - 1.0
-    val yMax = listOfNotNull(temps.max(), bandHi, threshold).max() + 1.0
+    val yMin = (listOfNotNull(temps.min(), bandLo) + thresholds).min() - 1.0
+    val yMax = (listOfNotNull(temps.max(), bandHi) + thresholds).max() + 1.0
     val hums = samples.mapNotNull { it.humidity }
     val showRh = shown.rh && hums.isNotEmpty()
-    val hMin = (hums.minOrNull() ?: 0.0) - 2.0
-    val hMax = (hums.maxOrNull() ?: 0.0) + 2.0
+    val showRhAvg = shown.rhAvg && rhAverage.size >= 2
+    // The humidity scale is there for the trace, its average, or both.
+    val rhScale = showRh || showRhAvg
+    val rhAll = hums + rhAverage.map { it.second } + rhThresholds
+    val hMin = (rhAll.minOrNull() ?: 0.0) - 2.0
+    val hMax = (rhAll.maxOrNull() ?: 0.0) + 2.0
     val span = (toEpochS - fromEpochS).coerceAtLeast(1).toFloat()
     val segments = TrendSegments.split(samples)
     // The average line is drawn on the temperature scale too.
     val tempScale = shown.temp || shown.avg
     val tempTicks = if (tempScale) AxisTicks.of(yMin, yMax) else emptyList()
-    val rhTicks = if (showRh) AxisTicks.of(hMin, hMax) else emptyList()
+    val rhTicks = if (rhScale) AxisTicks.of(hMin, hMax) else emptyList()
     val measurer = rememberTextMeasurer()
     val tickStyle = MaterialTheme.typography.labelSmall
 
@@ -95,6 +106,13 @@ fun TrendChart(
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
+            if (shown.rhAvg && rhWindowMean != null) {
+                Text(
+                    "   avg ${rhWindowMean.roundToInt()}%",
+                    color = CoolerColors.RhAverage,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
             Spacer(Modifier.weight(1f))
             Text(windowLabel, color = CoolerColors.Muted, style = MaterialTheme.typography.labelSmall)
         }
@@ -107,7 +125,7 @@ fun TrendChart(
         ) {
             // Each shown scale gets a gutter of its own; the plot sits between them.
             val left = if (tempScale) 28.dp.toPx() else 4.dp.toPx()
-            val right = size.width - (if (showRh) 32.dp.toPx() else 4.dp.toPx())
+            val right = size.width - (if (rhScale) 32.dp.toPx() else 4.dp.toPx())
             val plotW = right - left
             fun x(t: Long) = left + (t - fromEpochS) / span * plotW
             fun y(c: Double) = ((yMax - c) / (yMax - yMin)).toFloat() * size.height
@@ -137,25 +155,28 @@ fun TrendChart(
                 val rhRuns = segments.flatMap { seg -> splitWhere(seg) { it.humidity == null } }
                 trace(rhRuns, CoolerColors.Humidity, 1.5f, { x(it.epochS) }, { hy(it.humidity!!) })
             }
-            if (threshold != null) {
-                drawLine(
-                    CoolerColors.Warn, Offset(left, y(threshold)), Offset(right, y(threshold)), 1.5.dp.toPx(),
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx())),
-                )
+            val dash = PathEffect.dashPathEffect(floatArrayOf(8.dp.toPx(), 6.dp.toPx()))
+            if (tempScale) thresholds.forEach { v ->
+                drawLine(CoolerColors.Warn, Offset(left, y(v)), Offset(right, y(v)), 1.5.dp.toPx(), pathEffect = dash)
+            }
+            if (rhScale) rhThresholds.forEach { v ->
+                drawLine(CoolerColors.Humidity, Offset(left, hy(v)), Offset(right, hy(v)), 1.5.dp.toPx(), pathEffect = dash)
             }
             if (shown.temp) trace(segments, lineColor, 2f, { x(it.epochS) }, { y(it.value) })
-            if (shown.avg && average.size >= 2) {
-                // The rolling mean is smooth by construction; one path, broken only
-                // where the record (and so the mean) has a hole.
+            // The rolling means are smooth by construction; one path each, broken only
+            // where the record (and so the mean) has a hole.
+            fun meanLine(points: List<Pair<Long, Double>>, color: Color, py: (Double) -> Float) {
                 val line = Path()
                 var prev: Long? = null
-                average.forEach { (t, v) ->
+                points.forEach { (t, v) ->
                     val px = x(t).coerceAtLeast(left)
-                    if (prev == null || t - prev!! > TrendSegments.MIN_GAP_S) line.moveTo(px, y(v)) else line.lineTo(px, y(v))
+                    if (prev == null || t - prev!! > TrendSegments.MIN_GAP_S) line.moveTo(px, py(v)) else line.lineTo(px, py(v))
                     prev = t
                 }
-                drawPath(line, CoolerColors.Average, style = Stroke(width = 2.dp.toPx()))
+                drawPath(line, color, style = Stroke(width = 2.dp.toPx()))
             }
+            if (showRhAvg) meanLine(rhAverage, CoolerColors.RhAverage) { hy(it) }
+            if (shown.avg && average.size >= 2) meanLine(average, CoolerColors.Average) { y(it) }
         }
         if (shown.temp) {
             Text("min ${StatusText.temp(temps.min())}$unit", color = CoolerColors.Muted, style = MaterialTheme.typography.labelSmall)

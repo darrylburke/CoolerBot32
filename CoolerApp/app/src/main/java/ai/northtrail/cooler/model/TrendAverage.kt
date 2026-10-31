@@ -55,6 +55,17 @@ object TrendAverage {
      */
     fun latest(trend: TrendBuffer, nowS: Long): Double? = latest(trend.samples(nowS - 2 * WINDOW_S), nowS)
 
+    /**
+     * The samples that carry humidity, with it as the value, so every function here
+     * averages humidity instead. A reading without humidity is left out.
+     */
+    fun humidity(samples: List<Sample>): List<Sample> =
+        samples.mapNotNull { s -> s.humidity?.let { s.copy(value = it) } }
+
+    /** [latest] for humidity. */
+    fun latestHumidity(trend: TrendBuffer, nowS: Long): Double? =
+        latest(humidity(trend.samples(nowS - 2 * WINDOW_S)), nowS)
+
     /** One decimal, or "-.-" while there is no average yet. */
     fun text(avg: Double?): String = avg?.let { String.format(Locale.US, "%.1f", it) } ?: "-.-"
 

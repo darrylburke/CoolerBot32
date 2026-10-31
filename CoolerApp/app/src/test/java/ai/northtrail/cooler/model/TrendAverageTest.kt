@@ -90,4 +90,19 @@ class TrendAverageTest {
         val now = 1_800_000_000L + 120 * 60 + 30
         assertEquals(4.0, TrendAverage.latest(trend, now)!!, 1e-9)
     }
+
+    @Test
+    fun humidityAveragesTheHumidityAndSkipsReadingsWithout() {
+        val s = (0 until 61).map { Sample(it * 60L, 4.0, false, if (it == 30) null else 60.0 + (it % 2) * 10) }
+        val h = TrendAverage.humidity(s)
+        assertEquals(60, h.size)
+        assertEquals(65.0, TrendAverage.mean(h, 0, 3_600)!!, 0.5)
+        assertEquals(4.0, TrendAverage.mean(s, 0, 3_600)!!, 1e-9)   // temperature is untouched
+    }
+
+    @Test
+    fun latestHumidityIsTheHourEndingNow() {
+        val trend = (0 until 121).fold(TrendBuffer()) { b, i -> b.appended(1_790_000_000L + i * 60, 4.0, false, 70.0) }
+        assertEquals(70.0, TrendAverage.latestHumidity(trend, 1_790_000_000L + 120 * 60)!!, 1e-9)
+    }
 }

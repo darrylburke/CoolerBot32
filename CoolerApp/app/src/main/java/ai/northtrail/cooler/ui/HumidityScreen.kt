@@ -21,7 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-/** The dehumidifier's tab: a Graph page and a Controls page (spec 2026-10-28-app-humidity-tab-design.md). */
+/** The Temp/Humidity tab: a Graph page and a Controls page (specs 2026-10-28-app-humidity-tab, 2026-10-31-dehum-rules). */
 @Composable
 fun HumidityScreen(
     ui: DehumUi,

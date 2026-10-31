@@ -30,9 +30,16 @@ private class FakeDehumTransport : CoolerTransport {
     override fun publish(publish: Publish): Boolean { published += publish; return true }
 }
 
-private fun data(mode: String = "cycle", humidity: String = "54.5", cycleOn: Int = 30, minRun: Int = 10, rh: Int = 65) =
-    """{"v":1,"mode":"$mode","relay":1,"want":null,"link_lost":0,"hold_s":0,"remain_s":300,"phase":"on",""" +
-        """"temp":23.6,"humidity":$humidity,"humid":0,"dehum_rh":$rh,"min_run":$minRun,"timer_min":120,""" +
+private fun data(
+    mode: String = "cycle", humidity: String = "54.5", temp: String = "23.6", cycleOn: Int = 30, minRun: Int = 10,
+    r1Sensor: Int = 1, r1Value: Int = 65,
+) =
+    """{"v":1,"mode":"$mode","relay":1,"relay2":0,"link_lost":0,"hold_s":0,"hold2_s":0,"remain_s":300,"phase":"on",""" +
+        """"temp":$temp,"humidity":$humidity,"min_run":$minRun,"timer_min":120,""" +
+        """"r1_en":1,"r1_sensor":$r1Sensor,"r1_cmp":1,"r1_value":$r1Value,"r1_relay":1,"r1_action":1,"r1_match":0,""" +
+        """"r2_en":0,"r2_sensor":1,"r2_cmp":0,"r2_value":55,"r2_relay":1,"r2_action":0,"r2_match":0,""" +
+        """"r3_en":0,"r3_sensor":0,"r3_cmp":1,"r3_value":10,"r3_relay":2,"r3_action":1,"r3_match":0,""" +
+        """"r4_en":0,"r4_sensor":0,"r4_cmp":0,"r4_value":2,"r4_relay":2,"r4_action":1,"r4_match":0,""" +
         """"cycle_on":$cycleOn,"cycle_off":30,"run_s":25,"uptime_s":20}"""
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -64,16 +71,24 @@ class DehumControllerTest {
         val ui = c.ui.value
         assertEquals(DehumView.ONLINE, ui.view)
         assertEquals(DehumMode.CYCLE, ui.state!!.mode)
-        assertEquals(listOf(Sample(5, 54.5, true)), ui.trend.all)
+        assertEquals(listOf(Sample(5, 23.6, true, 54.5)), ui.trend.all)
     }
 
     @Test
-    fun humidityNullIsAGapNotASample() = runTest {
+    fun temperatureNullIsAGapNotASample() = runTest {
+        val c = controller()
+        connected()
+        emit("dehum/data", data(temp = "null"))
+        assertNull(c.ui.value.state!!.temp)
+        assertTrue(c.ui.value.trend.all.isEmpty())
+    }
+
+    @Test
+    fun humidityNullKeepsTheTemperature() = runTest {
         val c = controller()
         connected()
         emit("dehum/data", data(humidity = "null"))
-        assertNull(c.ui.value.state!!.humidity)
-        assertTrue(c.ui.value.trend.all.isEmpty())
+        assertEquals(listOf(Sample(0, 23.6, true, null)), c.ui.value.trend.all)
     }
 
     @Test
@@ -124,9 +139,53 @@ class DehumControllerTest {
         emit("dehum/data", data())
         assertFalse(c.enterSetting("cycle_on", 5))
         assertFalse(c.enterSetting("coolerset", 5))
-        assertTrue(c.enterSetting("dehum_rh", 70))
+        assertFalse(c.enterSetting("dehum_rh", 70))
+        assertTrue(c.enterSetting("r1_value", 70))
         advanceTimeBy(DehumController.DEBOUNCE_MS + 1); runCurrent()
-        assertEquals(listOf(cmd("""{"dehum_rh":70}""")), transport.published)
+        assertEquals(listOf(cmd("""{"r1_value":70}""")), transport.published)
+    }
+
+    @Test
+    fun ruleThresholdRangeFollowsItsSensor() = runTest {
+        val c = controller()
+        connected()
+        emit("dehum/data", data(r1Sensor = 1, r1Value = 98))
+        assertFalse(c.enterSetting("r1_value", -5))     // humidity: 0..100
+        c.stepSetting("r1_value", +1); c.stepSetting("r1_value", +1); c.stepSetting("r1_value", +1)
+        assertEquals(100, c.ui.value.settingValue("r1_value"))
+        emit("dehum/data", data(r1Sensor = 0, r1Value = 20))
+        advanceTimeBy(DehumController.DEBOUNCE_MS + 10_000); runCurrent()
+        assertTrue(c.enterSetting("r1_value", -5))      // temperature: -20..50
+        assertFalse(c.enterSetting("r1_value", 51))
+    }
+
+    @Test
+    fun ruleChoicesAndEnableAreSentAndPendUntilEchoed() = runTest {
+        val c = controller()
+        connected()
+        emit("dehum/data", data())
+        assertTrue(c.enterSetting("r2_en", 1))
+        assertTrue(c.enterSetting("r3_relay", 1))
+        assertFalse(c.enterSetting("r3_relay", 3))
+        assertFalse(c.enterSetting("r2_action", 2))
+        advanceTimeBy(DehumController.DEBOUNCE_MS + 1); runCurrent()
+        assertEquals(setOf(cmd("""{"r2_en":1}"""), cmd("""{"r3_relay":1}""")), transport.published.toSet())
+        assertTrue(c.ui.value.isPending("r2_en"))
+        emit("dehum/data", data().replace("\"r2_en\":0", "\"r2_en\":1").replace("\"r3_relay\":2", "\"r3_relay\":1"))
+        assertFalse(c.ui.value.isPending("r2_en"))
+        assertFalse(c.ui.value.isPending("r3_relay"))
+    }
+
+    @Test
+    fun aTimedOutRuleEditIsNamed() = runTest {
+        val c = controller()
+        connected()
+        emit("dehum/data", data())
+        assertTrue(c.enterSetting("r2_value", 50))
+        advanceTimeBy(DehumController.DEBOUNCE_MS + 1); runCurrent()
+        // The live echoes keep saying 55, so the edit times out.
+        repeat(6) { advanceTimeBy(1_000); emit("dehum/data", data()) }
+        assertEquals("Not applied: Rule 2 threshold", c.ui.value.message)
     }
 
     @Test
@@ -172,6 +231,6 @@ class DehumControllerTest {
             .also { it.start(); runCurrent() }
         connected()
         emit("dehum/history", """{"v":1,"t0":$t0,"interval_s":60,"hum":[55,56],"temp":[23,23],"relay":[1,0]}""")
-        assertEquals(listOf(Sample(t0, 55.0, true), Sample(t0 + 60, 56.0, false)), c.ui.value.trend.all)
+        assertEquals(listOf(Sample(t0, 23.0, true, 55.0), Sample(t0 + 60, 23.0, false, 56.0)), c.ui.value.trend.all)
     }
 }

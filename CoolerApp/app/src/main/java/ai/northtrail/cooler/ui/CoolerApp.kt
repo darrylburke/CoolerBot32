@@ -32,7 +32,7 @@ private data class Tab(val label: String, val icon: ImageVector)
 private val tabs = listOf(
     Tab("Status", Icons.Filled.AcUnit),
     Tab("Settings", Icons.Filled.Tune),
-    Tab("Humidity", Icons.Filled.WaterDrop),
+    Tab("Temp/Humidity", Icons.Filled.WaterDrop),
     Tab("Detail", Icons.Filled.Info),
 )
 

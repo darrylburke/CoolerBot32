@@ -9,7 +9,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.longOrNull
 
 enum class DehumMode(val wire: String, val label: String) {
-    AUTO("auto", "AUTO"), ON("on", "ON"), OFF("off", "OFF"), TIMER("timer", "TIMER"), CYCLE("cycle", "CYCLE");
+    AUTO("auto", "AUTO (rules)"), ON("on", "ON"), OFF("off", "OFF"), TIMER("timer", "TIMER"), CYCLE("cycle", "CYCLE");
 
     companion object {
         /** The order of the mode buttons. */
@@ -23,17 +23,19 @@ enum class DehumMode(val wire: String, val label: String) {
 data class DehumState(
     val mode: DehumMode? = null,
     val relay: Boolean = false,
-    /** The Cooler's last want (1 = AC resting) within 90 s, else null. */
-    val want: Int? = null,
+    /** Relay 2 (the spare channel); only AUTO's rules drive it. */
+    val relay2: Boolean = false,
     val linkLost: Boolean = false,
     val holdS: Long = 0,
+    val hold2S: Long = 0,
     /** TIMER: time left; CYCLE: time left in this phase. */
     val remainS: Long = 0,
     /** CYCLE only: true in the run phase, false resting. */
     val phaseOn: Boolean? = null,
     val temp: Double? = null,
     val humidity: Double? = null,
-    val humid: Boolean = false,
+    /** Rule N's `rN_match` at index N-1: true while its condition holds. */
+    val ruleMatch: List<Boolean> = List(DehumBounds.RULE_COUNT) { false },
     val settings: Map<String, Int> = emptyMap(),
     val runS: Long = 0,
     val uptimeS: Long? = null,
@@ -48,14 +50,15 @@ object DehumStateParser {
         return DehumState(
             mode = DehumMode.of(o.text("mode")),
             relay = o.num("relay")?.intOrNull == 1,
-            want = o.num("want")?.intOrNull?.takeIf { it == 0 || it == 1 },
+            relay2 = o.num("relay2")?.intOrNull == 1,
             linkLost = o.num("link_lost")?.intOrNull == 1,
             holdS = o.num("hold_s")?.longOrNull ?: 0,
+            hold2S = o.num("hold2_s")?.longOrNull ?: 0,
             remainS = o.num("remain_s")?.longOrNull ?: 0,
             phaseOn = when (o.text("phase")) { "on" -> true; "off" -> false; else -> null },
             temp = o.num("temp")?.doubleOrNull,
             humidity = o.num("humidity")?.doubleOrNull,
-            humid = o.num("humid")?.intOrNull == 1,
+            ruleMatch = (1..DehumBounds.RULE_COUNT).map { n -> o.num("r${n}_match")?.intOrNull == 1 },
             settings = DehumBounds.KEYS.mapNotNull { k -> o.num(k)?.intOrNull?.let { k to it } }.toMap(),
             runS = o.num("run_s")?.longOrNull ?: 0,
             uptimeS = o.num("uptime_s")?.longOrNull,

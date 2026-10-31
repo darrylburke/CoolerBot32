@@ -36,7 +36,7 @@ data class DehumUi(
     /** When [state] arrived, if it came from a live (non-retained) message. */
     val stateLiveAtMillis: Long? = null,
     val lastLiveDataAtMillis: Long? = null,
-    /** Humidity over time ([ai.northtrail.cooler.model.Sample.value] is %RH). */
+    /** The box sensor over time: [ai.northtrail.cooler.model.Sample.value] is °C, `humidity` %RH. */
     val trend: TrendBuffer = TrendBuffer(),
     val drafts: Map<String, Int> = emptyMap(),
     val pending: Map<String, Pending> = emptyMap(),
@@ -87,25 +87,23 @@ class DehumController(
 
     fun stepSetting(key: String, direction: Int) {
         val s = state.value
-        val bound = DehumBounds.find(key) ?: return
+        val range = DehumBounds.range(key, s::settingValue) ?: return
         val current = s.settingValue(key) ?: return
         if (!s.controlsEnabled) return
-        val next = (current + direction * bound.step).coerceIn(floor(s, key), bound.hi)
+        val next = (current + direction * DehumBounds.step(key)).coerceIn(range)
         if (next != current) edit(key, next)
     }
 
-    /** A typed value: sent as is, or refused (false) outside the live range. */
+    /** A typed value or a rule choice: sent as is, or refused (false) outside the live range. */
     fun enterSetting(key: String, value: Int): Boolean {
         val s = state.value
-        val bound = DehumBounds.find(key) ?: return false
-        if (!s.controlsEnabled || value !in floor(s, key)..bound.hi) return false
+        val range = DehumBounds.range(key, s::settingValue) ?: return false
+        if (!s.controlsEnabled || value !in range) return false
         edit(key, value)
         return true
     }
 
     fun consumeMessage() = state.update { it.copy(message = null) }
-
-    private fun floor(s: DehumUi, key: String) = DehumBounds.floor(key, s.settingValue("min_run") ?: 0)
 
     private fun onMessage(m: IncomingMessage) {
         val now = clock()
@@ -124,8 +122,8 @@ class DehumController(
                     return
                 }
                 update { cur ->
-                    val h = parsed.humidity
-                    val trend = if (!m.retained && h != null) cur.trend.appended(now / 1_000, h, parsed.relay) else cur.trend
+                    val trend = if (m.retained) cur.trend
+                    else cur.trend.appended(now / 1_000, parsed.temp, parsed.relay, parsed.humidity)
                     cur.copy(
                         state = parsed,
                         stateLiveAtMillis = if (m.retained) null else now,
@@ -179,7 +177,7 @@ class DehumController(
                 view = DehumHealth.evaluate(next.link, next.online, next.state, next.lastLiveDataAtMillis, now),
                 pending = r.pending,
                 message = if (r.timedOut.isEmpty()) next.message
-                else "Not applied: " + r.timedOut.joinToString { key -> DehumBounds.find(key)?.label ?: key },
+                else "Not applied: " + r.timedOut.joinToString { key -> DehumBounds.label(key) },
             )
         }
     }

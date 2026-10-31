@@ -1,15 +1,19 @@
 package ai.northtrail.cooler.ui
 
 import ai.northtrail.cooler.DehumUi
+import ai.northtrail.cooler.model.DehumBounds
 import ai.northtrail.cooler.model.DehumStatusText
+import ai.northtrail.cooler.model.Series
 import ai.northtrail.cooler.model.SeriesShown
+import ai.northtrail.cooler.model.StatusText
 import ai.northtrail.cooler.model.TrendAverage
 import ai.northtrail.cooler.model.TrendWindow
 import ai.northtrail.cooler.model.TrendZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,7 +35,11 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import kotlin.math.roundToInt
 
-/** Humidity now and its 1-hour average, the mode, and the trend (like the Cooler's Status page). */
+/**
+ * The box sensor now and its 1-hour averages, the mode, and the trend of temperature and
+ * humidity with both averages (like the Cooler's Status page). Spec 2026-10-31.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun HumidityGraph(ui: DehumUi, nowEpochS: Long) {
     val s = ui.state
@@ -40,30 +48,49 @@ fun HumidityGraph(ui: DehumUi, nowEpochS: Long) {
             val avg = TrendAverage.text(TrendAverage.latest(ui.trend, nowEpochS))
             Text(
                 buildAnnotatedString {
-                    append(s?.humidity?.roundToInt()?.toString() ?: "--")
+                    append(StatusText.temp(s?.temp))
                     withStyle(SpanStyle(color = CoolerColors.Average)) { append(" / $avg") }
-                    withStyle(SpanStyle(fontSize = MaterialTheme.typography.headlineMedium.fontSize)) { append(" %RH") }
+                    withStyle(SpanStyle(fontSize = MaterialTheme.typography.headlineMedium.fontSize)) { append(" °C") }
                 },
-                style = MaterialTheme.typography.displayLarge,
+                style = MaterialTheme.typography.displayMedium,
+                maxLines = 1,
+            )
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.Bottom) {
+            val rhAvg = TrendAverage.text(TrendAverage.latestHumidity(ui.trend, nowEpochS))
+            Text(
+                buildAnnotatedString {
+                    withStyle(SpanStyle(color = CoolerColors.Humidity)) { append(s?.humidity?.roundToInt()?.toString() ?: "--") }
+                    withStyle(SpanStyle(color = CoolerColors.RhAverage)) { append(" / $rhAvg") }
+                    withStyle(SpanStyle(fontSize = MaterialTheme.typography.titleMedium.fontSize)) { append(" %RH") }
+                },
+                style = MaterialTheme.typography.headlineLarge,
                 maxLines = 1,
             )
         }
         Text(
-            listOf(
-                DehumStatusText.mode(s),
-                if (s?.relay == true) "Running" else "Stopped",
-                DehumStatusText.auto(s),
-            ).filter { it.isNotEmpty() }.joinToString("  ·  "),
+            listOf(DehumStatusText.mode(s), DehumStatusText.relays(s), DehumStatusText.auto(s))
+                .filter { it.isNotEmpty() }.joinToString("  ·  "),
             color = CoolerColors.Muted,
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
         if (s?.linkLost == true) {
             Text("Broker link lost: off", color = CoolerColors.Warn, modifier = Modifier.padding(horizontal = 16.dp))
         }
         var zoom by rememberSaveable { mutableStateOf(TrendZoom.DEFAULT) }
+        var showTemp by rememberSaveable { mutableStateOf(true) }
+        var showRh by rememberSaveable { mutableStateOf(true) }
         var showAvg by rememberSaveable { mutableStateOf(true) }
+        var showRhAvg by rememberSaveable { mutableStateOf(true) }
+        val shown = SeriesShown(showTemp, showRh, showAvg, showRhAvg)
         val window = TrendWindow.of(zoom, nowEpochS)
         val withLead = ui.trend.samples(window.fromEpochS - TrendAverage.WINDOW_S)
+        val rhLead = TrendAverage.humidity(withLead)
+        // A dashed line at each enabled rule's threshold, on its sensor's scale.
+        val rules = (1..DehumBounds.RULE_COUNT).filter { s?.settings?.get(DehumBounds.ruleKey(it, "en")) == 1 }
+        fun thresholdsFor(sensor: Int) = rules
+            .filter { s?.settings?.get(DehumBounds.ruleKey(it, "sensor")) == sensor }
+            .mapNotNull { s?.settings?.get(DehumBounds.ruleKey(it, "value"))?.toDouble() }
         TrendChart(
             samples = ui.trend.samples(window.fromEpochS),
             fromEpochS = window.fromEpochS,
@@ -71,27 +98,38 @@ fun HumidityGraph(ui: DehumUi, nowEpochS: Long) {
             windowLabel = window.label,
             setpoint = null,
             range = null,
-            shown = SeriesShown(temp = true, rh = false, avg = showAvg),
+            shown = shown,
             average = TrendAverage.rolling(withLead, window.fromEpochS),
             windowMean = TrendAverage.mean(withLead, window.fromEpochS, window.toEpochS),
-            unit = "%",
-            lineColor = CoolerColors.Humidity,
-            threshold = s?.settings?.get("dehum_rh")?.toDouble(),
-            modifier = Modifier.fillMaxWidth().height(220.dp).padding(horizontal = 16.dp).padding(top = 16.dp),
+            rhAverage = TrendAverage.rolling(rhLead, window.fromEpochS),
+            rhWindowMean = TrendAverage.mean(rhLead, window.fromEpochS, window.toEpochS),
+            thresholds = thresholdsFor(DehumBounds.SENSOR_TEMP),
+            rhThresholds = thresholdsFor(DehumBounds.SENSOR_HUM),
+            modifier = Modifier.fillMaxWidth().height(240.dp).padding(horizontal = 16.dp).padding(top = 16.dp),
         )
-        Row(
+        FlowRow(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             TrendZoom.entries.forEach { z -> ToggleChip(z.label, on = z == zoom, onColor = CoolerColors.Accent) { zoom = z } }
-            Spacer(Modifier.weight(1f))
-            ToggleChip("Avg", on = showAvg, onColor = CoolerColors.Average) { showAvg = !showAvg }
+        }
+        FlowRow(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            fun apply(next: SeriesShown) { showTemp = next.temp; showRh = next.rh; showAvg = next.avg; showRhAvg = next.rhAvg }
+            ToggleChip("Temp", on = showTemp, onColor = CoolerColors.Accent) { apply(shown.toggled(Series.TEMP)) }
+            ToggleChip("RH", on = showRh, onColor = CoolerColors.Humidity) { apply(shown.toggled(Series.RH)) }
+            ToggleChip("Avg", on = showAvg, onColor = CoolerColors.Average) { apply(shown.toggled(Series.AVG)) }
+            ToggleChip("RH avg", on = showRhAvg, onColor = CoolerColors.RhAverage) { apply(shown.toggled(Series.RH_AVG)) }
         }
         Text(
-            "Dashed line: AUTO threshold. Shaded: dehumidifier running.",
+            "Dashed lines: enabled rules' thresholds. Shaded: relay 1 (dehumidifier) running.",
             color = CoolerColors.Muted,
             style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
     }
 }

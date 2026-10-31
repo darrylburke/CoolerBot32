@@ -12,11 +12,20 @@ class DehumHistoryParserTest {
         """{"v":$v,"t0":$start,"interval_s":60,"hum":[$hum],"temp":[$temp],"relay":[$relay]}"""
 
     @Test
-    fun keepsSlotsWithHumidity() {
+    fun temperatureIsTheValueAndHumidityRidesAlong() {
         val w = DehumHistoryParser.parse(body(), now)!!
         assertEquals(t0, w.fromS)
         assertEquals(t0 + 180, w.toS)
-        assertEquals(listOf(Sample(t0, 55.0, true), Sample(t0 + 120, 57.0, null)), w.samples)
+        assertEquals(
+            listOf(Sample(t0, 23.1, true, 55.0), Sample(t0 + 60, 23.2, false, null), Sample(t0 + 120, 23.3, null, 57.0)),
+            w.samples,
+        )
+    }
+
+    @Test
+    fun slotsWithoutTemperatureAreLeftOut() {
+        val w = DehumHistoryParser.parse(body(temp = "23.1,null,23.3"), now)!!
+        assertEquals(listOf(t0, t0 + 120), w.samples.map { it.epochS })
     }
 
     @Test

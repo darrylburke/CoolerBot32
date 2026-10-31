@@ -6,15 +6,19 @@ wall LCD. Design: `docs/superpowers/specs/2026-09-28-cooler-android-app-design.m
 
 - **Status**: box temperature and humidity, run state (same wording as the
   panel), override switch, defrost / fault chips, coil temperature, compressor,
-  and a trend of the controller's recent history plus live data.
+  and a trend of the controller's recent history plus live data (temperature,
+  humidity and the 1-hour average of each).
 - **Settings**: the controller's ten settings with the panel's limits. Changes
   are sent after a short pause and confirmed by the controller. Tap a value to
   type it instead of stepping (Send stays off outside the allowed range).
-- **Humidity**: the dehumidifier (`../RULES-dehum.md`). *Graph*: humidity now and
-  its 1-hour average, the mode, and a trend with the AUTO threshold dashed and
-  running time shaded (24 h back with Node-RED's `dehum/history`). *Controls*:
-  ON / OFF / TIMER / AUTO / CYCLE and its five settings, stepped or typed. It
-  works when the Cooler is offline; only the broker and the dehumidifier are needed.
+- **Temp/Humidity**: the dehumidifier box (`../RULES-dehum.md`). *Graph*: the box
+  sensor's temperature and humidity now with their 1-hour averages, the mode, both
+  relays, and a trend of temperature, humidity and both averages (chips to hide
+  each), with each enabled rule's threshold dashed and relay 1's running time shaded
+  (24 h back with Node-RED's `dehum/history`). *Controls*: ON / OFF / TIMER /
+  AUTO / CYCLE, four timing settings, and AUTO's four rules, each Temp or Humidity ·
+  Above or Below · threshold · Relay 1 or 2 · turn On or Off, with an Enabled switch.
+  It needs only the broker and the dehumidifier, not the Cooler.
 - **Detail**: every status field, fin calibration (start, abort, reset) and the
   broker settings.
 

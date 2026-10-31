@@ -11,11 +11,18 @@ object DehumStatusText {
         }
     }
 
-    /** AUTO only: what the Cooler says and whether the room is humid. */
+    /** AUTO only: which rules hold now. */
     fun auto(s: DehumState?): String {
         if (s?.mode != DehumMode.AUTO) return ""
-        val ac = when (s.want) { 1 -> "AC resting"; 0 -> "AC cooling"; else -> "no Cooler signal" }
-        return "$ac · ${if (s.humid) "humid" else "dry"}"
+        val met = s.ruleMatch.withIndex().filter { it.value }.map { it.index + 1 }
+        return if (met.isEmpty()) "no rule met" else "rules met: ${met.joinToString(", ")}"
+    }
+
+    /** Both relays: "Relay 1 on · Relay 2 off". */
+    fun relays(s: DehumState?): String {
+        if (s == null) return ""
+        fun w(on: Boolean) = if (on) "on" else "off"
+        return "Relay 1 ${w(s.relay)} · Relay 2 ${w(s.relay2)}"
     }
 
     /** Minutes rounded up; hours once there is an hour or more. */

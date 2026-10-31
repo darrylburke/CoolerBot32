@@ -100,10 +100,12 @@ fun StatusScreen(ui: UiState, nowEpochS: Long, modifier: Modifier = Modifier) {
         var showTemp by rememberSaveable { mutableStateOf(true) }
         var showRh by rememberSaveable { mutableStateOf(true) }
         var showAvg by rememberSaveable { mutableStateOf(true) }
-        val shown = SeriesShown(showTemp, showRh, showAvg)
+        var showRhAvg by rememberSaveable { mutableStateOf(true) }
+        val shown = SeriesShown(showTemp, showRh, showAvg, showRhAvg)
         val window = TrendWindow.of(zoom, nowEpochS)
         // The rolling mean at the left edge needs the hour before it.
         val withLead = ui.trend.samples(window.fromEpochS - TrendAverage.WINDOW_S)
+        val rhLead = TrendAverage.humidity(withLead)
         TrendChart(
             samples = ui.trend.samples(window.fromEpochS),
             fromEpochS = window.fromEpochS,
@@ -114,6 +116,8 @@ fun StatusScreen(ui: UiState, nowEpochS: Long, modifier: Modifier = Modifier) {
             shown = shown,
             average = TrendAverage.rolling(withLead, window.fromEpochS),
             windowMean = TrendAverage.mean(withLead, window.fromEpochS, window.toEpochS),
+            rhAverage = TrendAverage.rolling(rhLead, window.fromEpochS),
+            rhWindowMean = TrendAverage.mean(rhLead, window.fromEpochS, window.toEpochS),
             modifier = Modifier.fillMaxWidth().height(220.dp).padding(horizontal = 16.dp).padding(top = 16.dp),
         )
         Row(
@@ -123,11 +127,16 @@ fun StatusScreen(ui: UiState, nowEpochS: Long, modifier: Modifier = Modifier) {
             TrendZoom.entries.forEach { z ->
                 ToggleChip(z.label, on = z == zoom, onColor = CoolerColors.Accent) { zoom = z }
             }
-            Spacer(Modifier.weight(1f))
-            fun apply(next: SeriesShown) { showTemp = next.temp; showRh = next.rh; showAvg = next.avg }
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            fun apply(next: SeriesShown) { showTemp = next.temp; showRh = next.rh; showAvg = next.avg; showRhAvg = next.rhAvg }
             ToggleChip("Temp", on = showTemp, onColor = CoolerColors.Accent) { apply(shown.toggled(Series.TEMP)) }
             ToggleChip("RH", on = showRh, onColor = CoolerColors.Humidity) { apply(shown.toggled(Series.RH)) }
             ToggleChip("Avg", on = showAvg, onColor = CoolerColors.Average) { apply(shown.toggled(Series.AVG)) }
+            ToggleChip("RH avg", on = showRhAvg, onColor = CoolerColors.RhAverage) { apply(shown.toggled(Series.RH_AVG)) }
         }
     }
 }
