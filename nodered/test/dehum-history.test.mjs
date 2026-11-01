@@ -96,3 +96,22 @@ test('keeps its own flow keys apart from the cooler flow', () => {
   assert.equal(h.store.get('avail'), undefined);
   assert.equal(h.store.get('dehum_avail'), 'offline');
 });
+
+test('a null reading later in the same minute keeps the good one', () => {
+  const h = harness();
+  h.data(d(97, 0.7, 1));
+  h.at(T + 30);
+  const out = h.data(d(null, null, 1));
+  assert.deepEqual(out.body.hum, [97]);
+  assert.deepEqual(out.body.temp, [0.7]);
+});
+
+test('a newer good reading in the same minute replaces the older one', () => {
+  const h = harness();
+  h.data(d(97, 0.7, 1));
+  h.at(T + 30);
+  const out = h.data(d(96, 0.9, 0));
+  assert.deepEqual(out.body.hum, [96]);
+  assert.deepEqual(out.body.temp, [0.9]);
+  assert.deepEqual(out.body.relay, [0]);
+});

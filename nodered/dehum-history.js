@@ -29,8 +29,10 @@ if (newest > slot || slot - newest > SLOTS * STEP) { h = fresh(); newest = slot 
 for (; newest < slot; newest += STEP) { h.temp.push(null); h.hum.push(null); h.relay.push(null); }
 
 const i = h.hum.length - 1;
-h.temp[i] = num(d.temp, 1);
-h.hum[i] = num(d.humidity, 0);
+// A null reading never erases a good one already in this minute: the sensor
+// can miss one read and the minute still has its value.
+h.temp[i] = num(d.temp, 1) ?? h.temp[i];
+h.hum[i] = num(d.humidity, 0) ?? h.hum[i];
 h.relay[i] = d.relay === 1 ? 1 : d.relay === 0 ? 0 : null;
 
 const drop = h.hum.length - SLOTS;
