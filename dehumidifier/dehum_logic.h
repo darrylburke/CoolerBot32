@@ -128,7 +128,9 @@ struct Inputs {
     bool mqtt_connected = false;
     float temp = NAN;            // HDC1080 temperature degC, NAN if none
     float rh = NAN;              // HDC1080 humidity %RH, NAN if none
-    uint32_t rh_age_ms = UINT32_MAX; // ms since the HDC1080 last delivered (both readings)
+    uint32_t rh_age_ms = UINT32_MAX;   // ms since the HDC1080 last delivered humidity
+    uint32_t temp_age_ms = UINT32_MAX; // ms since it last delivered temperature (the
+                                       // driver can deliver one without the other)
 };
 
 struct Outputs {
@@ -233,9 +235,8 @@ inline Outputs step(const Inputs& in, Settings& s, State& st, uint32_t now) {
     // TIMER/CYCLE count from the first connect, and keep counting through a broker loss.
     if (st.ever_connected && !restarted) sat_add(st.mode_ms, dt);
 
-    const bool fresh = in.rh_age_ms < RH_STALE_MS;
-    o.rh_valid = fresh && !std::isnan(in.rh);
-    o.temp_valid = fresh && !std::isnan(in.temp);
+    o.rh_valid = in.rh_age_ms < RH_STALE_MS && !std::isnan(in.rh);
+    o.temp_valid = in.temp_age_ms < RH_STALE_MS && !std::isnan(in.temp);
 
     // Rules are judged in every mode (the app shows "met"), but only AUTO acts on them.
     bool want_on[2] = {false, false}, want_off[2] = {false, false};

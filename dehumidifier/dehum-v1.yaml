@@ -27,10 +27,18 @@ esp32:
 
 globals:
   - { id: g_dirty, type: int, restore_value: no, initial_value: '1' }
-  # millis() of the HDC1080's last reading: the sensor keeps the old value when
-  # the chip stops answering, so the logic needs the reading's age.
+  # millis() of the HDC1080's last humidity and last temperature reading. The
+  # sensor keeps the old value when the chip stops answering, and the driver
+  # can deliver temperature then give up on humidity, so each has its own age.
   - { id: g_rh_ms, type: uint32_t, restore_value: no, initial_value: '0' }
   - { id: g_rh_seen, type: bool, restore_value: no, initial_value: 'false' }
+  - { id: g_t_ms, type: uint32_t, restore_value: no, initial_value: '0' }
+  - { id: g_t_seen, type: bool, restore_value: no, initial_value: 'false' }
+  # Sensor diagnostics since boot, published in dehum/data: read attempts, and
+  # how many delivered temperature and humidity (the driver fails silently).
+  - { id: g_rh_tries, type: uint32_t, restore_value: no, initial_value: '0' }
+  - { id: g_t_ok, type: uint32_t, restore_value: no, initial_value: '0' }
+  - { id: g_rh_ok, type: uint32_t, restore_value: no, initial_value: '0' }
 
 wifi:
   networks:
@@ -97,6 +105,11 @@ mqtt:
   username: !secret dehum_mqtt_username
   password: !secret dehum_mqtt_password
   keepalive: 15s
+  # Warnings and errors (e.g. a failing sensor) go to the broker, so they can
+  # be read without a USB cable. The dehum login may only write dehum/#.
+  log_topic:
+    topic: dehum/log
+    level: WARN
   # Never reboot on a lost broker: mode, TIMER and CYCLE must survive an outage.
   reboot_timeout: 0s
   client_id: ${device_name}
@@ -173,16 +186,19 @@ i2c:
 
 sensor:
   - platform: hdc1080
+    id: hdc
     address: 0x40
-    update_interval: 10s
+    update_interval: never   # read by the 10 s interval below, which counts tries
     temperature:
       id: rh_temp
       internal: true
       on_value:
-        - lambda: 'id(g_rh_ms) = millis(); id(g_rh_seen) = true;'
+        - lambda: 'id(g_t_ms) = millis(); id(g_t_seen) = true; id(g_t_ok) += 1;'
     humidity:
       id: rh_hum
       internal: true
+      on_value:
+        - lambda: 'id(g_rh_ms) = millis(); id(g_rh_seen) = true; id(g_rh_ok) += 1;'
 
   - platform: uptime
     id: uptime_s
@@ -200,6 +216,7 @@ script:
           in.temp = id(rh_temp).state;
           in.rh = id(rh_hum).state;
           in.rh_age_ms = id(g_rh_seen) ? millis() - id(g_rh_ms) : UINT32_MAX;
+          in.temp_age_ms = id(g_t_seen) ? millis() - id(g_t_ms) : UINT32_MAX;
           dehum::Outputs o = dehum::step(in, dehum_glue::settings(), dehum_glue::state(), millis());
           dehum_glue::out() = o;
           if (o.relay != id(relay).state) {
@@ -250,10 +267,31 @@ script:
               }
             }
             root["run_s"] = o.run_s;
+            // Diagnostics: which WiFi network / access point, its signal, and
+            // how the humidity sensor is doing since boot.
+            root["wifi_ssid"] = wifi::global_wifi_component->wifi_ssid();
+            {
+              const wifi::bssid_t b = wifi::global_wifi_component->wifi_bssid();
+              char bs[18];
+              snprintf(bs, sizeof bs, "%02X:%02X:%02X:%02X:%02X:%02X", b[0], b[1], b[2], b[3], b[4], b[5]);
+              root["wifi_bssid"] = bs;   // char[]: ArduinoJson copies it
+            }
+            root["wifi_rssi"] = wifi::global_wifi_component->wifi_rssi();
+            root["wifi_ch"] = wifi::global_wifi_component->get_wifi_channel();
+            root["rh_tries"] = id(g_rh_tries);
+            root["t_ok"] = id(g_t_ok);
+            root["rh_ok"] = id(g_rh_ok);
+            if (id(g_rh_seen)) root["rh_age_s"] = (millis() - id(g_rh_ms)) / 1000; else root["rh_age_s"] = nullptr;
+            if (id(g_t_seen)) root["t_age_s"] = (millis() - id(g_t_ms)) / 1000; else root["t_age_s"] = nullptr;
             root["uptime_s"] = std::isnan(id(uptime_s).state) ? (uint32_t)(millis() / 1000)
                                                                : (uint32_t) id(uptime_s).state;
 
 interval:
+  - interval: 10s
+    then:
+      - lambda: 'id(g_rh_tries) += 1;'
+      - component.update: hdc
+
   - interval: 1s
     then:
       - script.execute: control

@@ -22,6 +22,7 @@ struct Rig {
         in.rh = 50.0f;        // dry and mild: no default rule matches
         in.temp = 5.0f;
         in.rh_age_ms = 0;
+        in.temp_age_ms = 0;
         o = step(in, s, st, now);
     }
     Outputs tick(uint32_t ms = 1000) { now += ms; o = step(in, s, st, now); return o; }
@@ -333,9 +334,9 @@ TEST_CASE("stale or NaN reading: no match, latch cleared") {
     r.tick();
     REQUIRE(r.o.match[0]);
     REQUIRE(r.o.match[2]);
-    r.in.rh_age_ms = 29999;
+    r.in.rh_age_ms = 29999; r.in.temp_age_ms = 29999;
     CHECK(r.tick().match[0]);
-    r.in.rh_age_ms = 30000;                            // both readings come from the HDC1080
+    r.in.rh_age_ms = 30000; r.in.temp_age_ms = 30000;  // both readings stale
     r.tick();
     CHECK_FALSE(r.o.match[0]);
     CHECK_FALSE(r.o.match[2]);
@@ -343,7 +344,7 @@ TEST_CASE("stale or NaN reading: no match, latch cleared") {
     CHECK_FALSE(r.o.temp_valid);
     CHECK_FALSE(r.o.relay);
     CHECK_FALSE(r.o.relay2);
-    r.in.rh_age_ms = 0;
+    r.in.rh_age_ms = 0; r.in.temp_age_ms = 0;
     r.in.rh = 63.0f;                                   // inside the band, but the latch was cleared
     r.in.temp = 9.5f;
     r.tick();
@@ -611,4 +612,28 @@ TEST_CASE("publish_now on relay 2 and match changes") {
     CHECK_FALSE(r.tick().publish_now);
     r.in.temp = NAN;
     CHECK(r.tick().publish_now);                       // temp went null, r4 unmet
+}
+
+TEST_CASE("humidity and temperature go stale separately") {
+    // The HDC1080 driver publishes temperature, then gives up quietly if the
+    // humidity read fails: a fresh temperature must not vouch for an old humidity.
+    Settings s = no_rules();
+    s.rules[0] = {1, 1, 1, 65, 1, 1};   // humidity above 65
+    s.rules[2] = {1, 0, 1, 10, 2, 1};   // temp above 10
+    Rig r(s);
+    r.in.rh = 70.0f; r.in.temp = 12.0f;
+    r.tick();
+    REQUIRE(r.o.match[0]);
+    REQUIRE(r.o.match[2]);
+    r.in.rh_age_ms = 30000; r.in.temp_age_ms = 0;
+    r.tick();
+    CHECK_FALSE(r.o.rh_valid);
+    CHECK(r.o.temp_valid);
+    CHECK_FALSE(r.o.match[0]);
+    CHECK(r.o.match[2]);
+    r.in.rh_age_ms = 0; r.in.temp_age_ms = 30000;
+    r.tick();
+    CHECK(r.o.rh_valid);
+    CHECK_FALSE(r.o.temp_valid);
+    CHECK_FALSE(r.o.match[2]);
 }
